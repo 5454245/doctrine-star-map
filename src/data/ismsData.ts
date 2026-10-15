@@ -17,7 +17,9 @@ export { ISM_RELATIONSHIPS } from './relationships';
 export { PHILOSOPHY_QUIZ_QUESTIONS } from './quizQuestions';
 export type { QuizQuestion, QuizOption } from './quizQuestions';
 
-// 聚合全谱系 310 个精研主义流派星辰节点（含存在主义、虚无主义、社民、自由意志主义深度流派）
+import { getStereotypicalColor } from '../utils/ideologyColors';
+
+// 聚合全谱系 310 个精研主义流派星辰节点，并赋予其文化刻板印象专属代表色
 export const ISMS_DATA: IsmNode[] = [
   ...VOL1_ISMS,
   ...VOL2_ISMS,
@@ -28,7 +30,10 @@ export const ISMS_DATA: IsmNode[] = [
   ...VOL7_ISMS,
   ...VOL8_ISMS,
   ...EXTENSION_ISMS,
-];
+].map((ism) => ({
+  ...ism,
+  color: getStereotypicalColor(ism),
+}));
 
 // 辅助索引与工具函数
 export const ISMS_MAP = new Map<string, IsmNode>(

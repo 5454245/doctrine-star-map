@@ -1,5 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { IsmNode, IsmRelationship, CategoryType } from '../types/ism';
+import { audioEngine } from '../utils/audioEngine';
+import { computeRelaxedConstellationLayout } from '../utils/layoutOptimizer';
+import { Volume2, VolumeX, Maximize2, Compass } from 'lucide-react';
 
 interface ConstellationCanvasProps {
   nodes: IsmNode[];
@@ -8,8 +11,8 @@ interface ConstellationCanvasProps {
   highlightedNodeId: string | null;
   filterCategory: CategoryType | 'all';
   searchQuery: string;
-  onSelectNode: (node: IsmNode | null) => void;
-  onHoverNode?: (nodeId: string | null) => void;
+  onSelectNode: (node: IsmNode) => void;
+  onHoverNode?: (node: IsmNode | null) => void;
   flyToNodeId?: string | null;
 }
 
@@ -34,6 +37,26 @@ interface BackgroundStar {
   speed: number;
 }
 
+interface ClickShockwave {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  alpha: number;
+  color: string;
+  lineWidth: number;
+}
+
+interface ClickSpark {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  alpha: number;
+  color: string;
+  size: number;
+}
+
 export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
   nodes,
   relationships,
@@ -48,7 +71,7 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Viewport transformation: pan (tx, ty) & zoom scale
-  const transformRef = useRef({ tx: 0, ty: 0, scale: 1 });
+  const transformRef = useRef({ tx: 0, ty: 0, scale: 0.95 });
   const isDraggingCanvasRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const canvasMouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -56,52 +79,86 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
   const activeDraggedNodeRef = useRef<PhysicsNode | null>(null);
   const nodeDragStartScreenRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Hover state
+  // Audio mute state
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+
+  // Hover state with 300ms dwell delay to protect user attention
   const [hoveredNode, setHoveredNode] = useState<IsmNode | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingHoverNodeIdRef = useRef<string | null>(null);
 
-  // Physics simulation nodes
+  // Telemetry HUD state
+  const [telemetryZoom, setTelemetryZoom] = useState('95%');
+  const [telemetryCoords, setTelemetryCoords] = useState('0, 0');
+
+  // Physics simulation nodes & cached lookups
   const physicsNodesRef = useRef<PhysicsNode[]>([]);
+  const nodeMapRef = useRef<Map<string, PhysicsNode>>(new Map());
   const backgroundStarsRef = useRef<BackgroundStar[]>([]);
   const animationFrameIdRef = useRef<number | null>(null);
 
-  // Initialize or update physics nodes
+  // Interactive feedback particles
+  const shockwavesRef = useRef<ClickShockwave[]>([]);
+  const sparksRef = useRef<ClickSpark[]>([]);
+
+  // Simulation energy for high performance (sleeps when stable!)
+  const simEnergyRef = useRef(100);
+
+  // Initialize or update physics nodes using collision-free layout optimizer
   useEffect(() => {
+    // 1. Calculate spacious, non-overlapping coordinates (>= 135px distance guarantee)
+    const relaxedPositions = computeRelaxedConstellationLayout(nodes);
+
     const existingMap = new Map<string, PhysicsNode>(
       physicsNodesRef.current.map((n) => [n.id, n])
     );
 
-    physicsNodesRef.current = nodes.map((node) => {
+    const newNodes = nodes.map((node) => {
+      const relaxed = relaxedPositions.get(node.id) || node.initialPosition || { x: 0, y: 0 };
       const existing = existingMap.get(node.id);
       if (existing) {
         existing.data = node;
-        existing.targetX = node.initialPosition.x;
-        existing.targetY = node.initialPosition.y;
+        existing.targetX = relaxed.x;
+        existing.targetY = relaxed.y;
         return existing;
       }
       return {
         id: node.id,
-        x: node.initialPosition.x + (Math.random() - 0.5) * 40,
-        y: node.initialPosition.y + (Math.random() - 0.5) * 40,
+        x: relaxed.x,
+        y: relaxed.y,
         vx: 0,
         vy: 0,
-        targetX: node.initialPosition.x,
-        targetY: node.initialPosition.y,
-        radius: 24,
+        targetX: relaxed.x,
+        targetY: relaxed.y,
+        radius: 20,
         data: node,
       };
     });
+
+    physicsNodesRef.current = newNodes;
+    nodeMapRef.current = new Map(newNodes.map((n) => [n.id, n]));
+    simEnergyRef.current = 60; // smooth settle
   }, [nodes]);
+
+  // Clean up hover timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Generate background ambient stars once
   useEffect(() => {
     const stars: BackgroundStar[] = [];
-    for (let i = 0; i < 240; i++) {
+    for (let i = 0; i < 280; i++) {
       stars.push({
-        x: (Math.random() - 0.5) * 3800,
-        y: (Math.random() - 0.5) * 2800,
-        size: Math.random() * 1.8 + 0.4,
-        alpha: Math.random() * 0.7 + 0.2,
+        x: (Math.random() - 0.5) * 4400,
+        y: (Math.random() - 0.5) * 3600,
+        size: Math.random() * 1.5 + 0.3,
+        alpha: Math.random() * 0.6 + 0.2,
         speed: Math.random() * 0.02 + 0.005,
       });
     }
@@ -115,38 +172,93 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
       transformRef.current = {
         tx: rect.width / 2,
         ty: rect.height / 2,
-        scale: 0.95,
+        scale: 0.85,
       };
+      setTelemetryZoom('85%');
+      setTelemetryCoords(`${Math.round(rect.width / 2)}, ${Math.round(rect.height / 2)}`);
     }
   }, []);
 
-  // Smoothly Fly camera to specific node when requested
+  // Spawn visual and acoustic click feedback
+  const triggerClickFeedback = useCallback((node: PhysicsNode) => {
+    // 1. Acoustic feedback
+    audioEngine.playStarClick(node.data.category);
+
+    // 2. Quantum shockwave rings
+    shockwavesRef.current.push({
+      x: node.x,
+      y: node.y,
+      radius: node.radius,
+      maxRadius: node.radius + 110,
+      alpha: 1.0,
+      color: node.data.color || '#38bdf8',
+      lineWidth: 2.5,
+    });
+
+    // 3. Energetic starlight sparks burst
+    const sparkCount = 16;
+    for (let i = 0; i < sparkCount; i++) {
+      const angle = (i / sparkCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+      const speed = Math.random() * 4.5 + 2.0;
+      sparksRef.current.push({
+        x: node.x,
+        y: node.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        alpha: 1.0,
+        color: i % 2 === 0 ? '#ffffff' : (node.data.color || '#38bdf8'),
+        size: Math.random() * 2.4 + 1.2,
+      });
+    }
+
+    // Wake up physics for gentle recoil
+    simEnergyRef.current = Math.max(simEnergyRef.current, 35);
+  }, []);
+
+  // Smoothly Fly camera to specific node when requested (with drawer offset awareness & luxury ease)
   useEffect(() => {
     if (!flyToNodeId || !canvasRef.current) return;
-    const targetNode = physicsNodesRef.current.find((n) => n.id === flyToNodeId);
+    const targetNode = nodeMapRef.current.get(flyToNodeId);
     if (!targetNode) return;
+
+    triggerClickFeedback(targetNode);
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const targetTx = rect.width / 2 - targetNode.x * 1.15;
-    const targetTy = rect.height / 2 - targetNode.y * 1.15;
+
+    // If detail drawer is open (or user is navigating from details), center in the visible workspace area
+    const isDrawerOpen = !!selectedNodeId;
+    let visibleCenterX = rect.width / 2;
+    if (isDrawerOpen) {
+      if (window.innerWidth >= 1024) {
+        visibleCenterX = Math.max(160, (rect.width - 540) / 2);
+      } else if (window.innerWidth >= 640) {
+        visibleCenterX = Math.max(120, (rect.width - 480) / 2);
+      }
+    }
+
     const targetScale = 1.15;
+    const targetTx = visibleCenterX - targetNode.x * targetScale;
+    const targetTy = rect.height / 2 - targetNode.y * targetScale;
 
     const startTx = transformRef.current.tx;
     const startTy = transformRef.current.ty;
     const startScale = transformRef.current.scale;
     const startTime = performance.now();
-    const duration = 500;
+    const duration = 750; // Luxuriously smooth 750ms cinematic camera glide
 
     const animateCamera = (time: number) => {
       const elapsed = time - startTime;
       const progress = Math.min(1, elapsed / duration);
-      // Ease out cubic
-      const ease = 1 - Math.pow(1 - progress, 3);
+      // Premium quartic ease-out: starts with gentle speed and decelerates smoothly like a luxury spacecraft docking
+      const ease = 1 - Math.pow(1 - progress, 4);
 
       transformRef.current.tx = startTx + (targetTx - startTx) * ease;
       transformRef.current.ty = startTy + (targetTy - startTy) * ease;
       transformRef.current.scale = startScale + (targetScale - startScale) * ease;
+
+      setTelemetryZoom(`${Math.round(transformRef.current.scale * 100)}%`);
+      setTelemetryCoords(`${Math.round(transformRef.current.tx)}, ${Math.round(transformRef.current.ty)}`);
 
       if (progress < 1) {
         requestAnimationFrame(animateCamera);
@@ -154,9 +266,9 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
     };
 
     requestAnimationFrame(animateCamera);
-  }, [flyToNodeId]);
+  }, [flyToNodeId, selectedNodeId, triggerClickFeedback]);
 
-  // Main Render & Physics Loop
+  // Main High-Performance Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -180,27 +292,25 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
       const { width, height } = canvas;
       const { tx, ty, scale } = transformRef.current;
 
-      // 1. Clear background
-      ctx.fillStyle = '#0c0a09';
+      // 1. Deep Obsidian Void: Pitch Black (#000000) with faint radial nebula
+      ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, width, height);
 
-      // Deep space radial nebula gradient
-      const gradient = ctx.createRadialGradient(
+      const nebula = ctx.createRadialGradient(
         width / 2,
         height / 2,
-        80,
+        60,
         width / 2,
         height / 2,
         Math.max(width, height) * 0.85
       );
-      gradient.addColorStop(0, 'rgba(30, 27, 24, 0.95)');
-      gradient.addColorStop(0.45, 'rgba(14, 12, 10, 0.98)');
-      gradient.addColorStop(1, '#070605');
-      ctx.fillStyle = gradient;
+      nebula.addColorStop(0, 'rgba(10, 16, 28, 0.45)');
+      nebula.addColorStop(0.5, 'rgba(4, 6, 12, 0.7)');
+      nebula.addColorStop(1, '#000000');
+      ctx.fillStyle = nebula;
       ctx.fillRect(0, 0, width, height);
 
       ctx.save();
-      // Apply Camera Viewport transformation
       ctx.translate(tx, ty);
       ctx.scale(scale, scale);
 
@@ -209,64 +319,44 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i];
         const twinkle = Math.sin(time * 2 + i) * 0.25 + 0.75;
-        ctx.fillStyle = `rgba(226, 232, 240, ${s.alpha * twinkle * 0.6})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha * twinkle * 0.65})`;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // 3. Physics step: Soft springs towards target + node-node soft repulsion
+      // 3. High-Performance Physics Step: Settles smoothly at relaxed anchors
       const pNodes = physicsNodesRef.current;
-      for (let i = 0; i < pNodes.length; i++) {
-        const nodeA = pNodes[i];
-        if (nodeA.isDragging) continue;
+      if (simEnergyRef.current > 0.04) {
+        let maxMovement = 0;
+        for (let i = 0; i < pNodes.length; i++) {
+          const nodeA = pNodes[i];
+          if (nodeA.isDragging) continue;
 
-        // Spring towards initial anchor
-        const dx = nodeA.targetX - nodeA.x;
-        const dy = nodeA.targetY - nodeA.y;
-        nodeA.vx += dx * 0.04;
-        nodeA.vy += dy * 0.04;
+          // Spring towards pre-calculated collision-free anchor
+          const dx = nodeA.targetX - nodeA.x;
+          const dy = nodeA.targetY - nodeA.y;
+          nodeA.vx += dx * 0.06;
+          nodeA.vy += dy * 0.06;
 
-        // Repulsion from other nodes to prevent heavy overlap
-        for (let j = i + 1; j < pNodes.length; j++) {
-          const nodeB = pNodes[j];
-          const rx = nodeB.x - nodeA.x;
-          const ry = nodeB.y - nodeA.y;
-          const distSq = rx * rx + ry * ry;
-          const minDist = 135;
-          if (distSq < minDist * minDist && distSq > 0.001) {
-            const dist = Math.sqrt(distSq);
-            const force = ((minDist - dist) / dist) * 0.15;
-            const fx = rx * force;
-            const fy = ry * force;
-            if (!nodeA.isDragging) {
-              nodeA.vx -= fx;
-              nodeA.vy -= fy;
-            }
-            if (!nodeB.isDragging) {
-              nodeB.vx += fx;
-              nodeB.vy += fy;
-            }
-          }
+          // Damping
+          nodeA.vx *= 0.75;
+          nodeA.vy *= 0.75;
+          nodeA.x += nodeA.vx;
+          nodeA.y += nodeA.vy;
+
+          const movement = Math.abs(nodeA.vx) + Math.abs(nodeA.vy);
+          if (movement > maxMovement) maxMovement = movement;
         }
 
-        // Apply friction/damping
-        nodeA.vx *= 0.82;
-        nodeA.vy *= 0.82;
-        nodeA.x += nodeA.vx;
-        nodeA.y += nodeA.vy;
+        // Decay simulation energy until peaceful sleep
+        simEnergyRef.current = maxMovement;
       }
 
-      // Fast lookup for nodes
-      const nodeMap = new Map<string, PhysicsNode>();
-      for (const n of pNodes) {
-        nodeMap.set(n.id, n);
-      }
+      // Fast node lookup
+      const nodeMap = nodeMapRef.current;
 
-      // 1. Determine active focus node:
-      // When a node is selected (selectedNodeId is active):
-      // The selected node remains the locked focal center!
-      // Pointing or hovering on non-highlighted stars must NOT spawn lines or badges.
+      // 4. Determine Active and Connected Sets
       const isSelectedMode = !!selectedNodeId;
       const activeId = isSelectedMode
         ? selectedNodeId
@@ -275,325 +365,329 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
       const connectedNodeIds = new Set<string>();
       if (activeId) {
         connectedNodeIds.add(activeId);
-        relationships.forEach((rel) => {
+        for (let i = 0; i < relationships.length; i++) {
+          const rel = relationships[i];
           if (rel.source === activeId) connectedNodeIds.add(rel.target);
           if (rel.target === activeId) connectedNodeIds.add(rel.source);
-        });
-      }
-
-      // If in selected mode, check if hovering over one of its direct connected neighbors
-      const focusedNeighborId =
-        isSelectedMode && hoveredNode && connectedNodeIds.has(hoveredNode.id) && hoveredNode.id !== selectedNodeId
-          ? hoveredNode.id
-          : null;
-
-      // 4. Draw Constellation Relationship Lines
-      // Draw background / dimmed lines first, then foreground highlighted lines on top
-      const backgroundLines: IsmRelationship[] = [];
-      const highlightedLines: IsmRelationship[] = [];
-
-      for (const rel of relationships) {
-        const src = nodeMap.get(rel.source);
-        const tgt = nodeMap.get(rel.target);
-        if (!src || !tgt) continue;
-
-        const srcMatchesCategory = filterCategory === 'all' || src.data.category === filterCategory;
-        const tgtMatchesCategory = filterCategory === 'all' || tgt.data.category === filterCategory;
-        if (!srcMatchesCategory && !tgtMatchesCategory) continue;
-
-        const isRelatedToActive = activeId && (rel.source === activeId || rel.target === activeId);
-        if (isRelatedToActive) {
-          highlightedLines.push(rel);
-        } else {
-          backgroundLines.push(rel);
         }
       }
 
-      // Draw normal / background lines
-      for (const rel of backgroundLines) {
-        const src = nodeMap.get(rel.source)!;
-        const tgt = nodeMap.get(rel.target)!;
-        const isDimmed = !!activeId;
+      // Viewport frustum bounds in world coordinates
+      const viewMinX = -tx / scale - 120;
+      const viewMaxX = (width - tx) / scale + 120;
+      const viewMinY = -ty / scale - 120;
+      const viewMaxY = (height - ty) / scale + 120;
 
-        let strokeColor = isDimmed ? 'rgba(68, 64, 60, 0.12)' : 'rgba(168, 162, 158, 0.22)';
-        let lineWidth = isDimmed ? 0.75 : 1;
-        let lineDash: number[] = [];
+      // 5. Render Constellation Network Lines (Batch Drawing for 60fps)
+      // Pass A: Background faint lines
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < relationships.length; i++) {
+        const rel = relationships[i];
+        const isHighlighted = activeId && (rel.source === activeId || rel.target === activeId);
+        if (isHighlighted) continue;
 
-        if (rel.type === 'opposition') lineDash = [6, 4];
-        else if (rel.type === 'catalyst') lineDash = [3, 3];
-        else if (rel.type === 'dialectical') lineDash = [8, 3, 2, 3];
+        const sourceNode = nodeMap.get(rel.source);
+        const targetNode = nodeMap.get(rel.target);
+        if (!sourceNode || !targetNode) continue;
 
+        // Frustum culling for lines
+        if (
+          (sourceNode.x < viewMinX && targetNode.x < viewMinX) ||
+          (sourceNode.x > viewMaxX && targetNode.x > viewMaxX) ||
+          (sourceNode.y < viewMinY && targetNode.y < viewMinY) ||
+          (sourceNode.y > viewMaxY && targetNode.y > viewMaxY)
+        ) {
+          continue;
+        }
+
+        let isVisible = true;
+        if (filterCategory !== 'all') {
+          isVisible = sourceNode.data.category === filterCategory || targetNode.data.category === filterCategory;
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchA = sourceNode.data.name.toLowerCase().includes(q);
+          const matchB = targetNode.data.name.toLowerCase().includes(q);
+          isVisible = isVisible && (matchA || matchB);
+        }
+
+        if (!isVisible) continue;
+
+        ctx.moveTo(sourceNode.x, sourceNode.y);
+        ctx.lineTo(targetNode.x, targetNode.y);
+      }
+      ctx.strokeStyle = activeId ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.12)';
+      ctx.stroke();
+
+      // Pass B: Active highlighted relationship lines
+      if (activeId) {
+        for (let i = 0; i < relationships.length; i++) {
+          const rel = relationships[i];
+          const isHighlighted = rel.source === activeId || rel.target === activeId;
+          if (!isHighlighted) continue;
+
+          const sourceNode = nodeMap.get(rel.source);
+          const targetNode = nodeMap.get(rel.target);
+          if (!sourceNode || !targetNode) continue;
+
+          let strokeColor = '#38bdf8'; // Cyan
+          let lineDash: number[] = [];
+
+          if (rel.type === 'opposition') {
+            strokeColor = '#f43f5e'; // Crimson
+            lineDash = [6, 4];
+          } else if (rel.type === 'fusion') {
+            strokeColor = '#10b981'; // Emerald
+            lineDash = [3, 3];
+          } else if (rel.type === 'evolution') {
+            strokeColor = '#38bdf8'; // Cyan
+            lineDash = [];
+          } else {
+            strokeColor = '#ffffff';
+            lineDash = [2, 2];
+          }
+
+          ctx.save();
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 2.2;
+          ctx.setLineDash(lineDash);
+          ctx.beginPath();
+          ctx.moveTo(sourceNode.x, sourceNode.y);
+          ctx.lineTo(targetNode.x, targetNode.y);
+          ctx.stroke();
+
+          // Animated energy photon packet along active line
+          const progress = (time * 1.5 + i * 0.3) % 1;
+          const px = sourceNode.x + (targetNode.x - sourceNode.x) * progress;
+          const py = sourceNode.y + (targetNode.y - sourceNode.y) * progress;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Telemetry Label Badge on active line
+          const midX = (sourceNode.x + targetNode.x) / 2;
+          const midY = (sourceNode.y + targetNode.y) / 2;
+          const label = rel.label || rel.type;
+
+          ctx.font = 'bold 9px "Plus Jakarta Sans", monospace';
+          const textWidth = ctx.measureText(label).width;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.roundRect(midX - textWidth / 2 - 5, midY - 8, textWidth + 10, 16, 4);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, midX, midY);
+
+          ctx.restore();
+        }
+      }
+
+      // 6. Render Click Particles & Quantum Shockwaves
+      // Shockwaves
+      const shockwaves = shockwavesRef.current;
+      for (let i = shockwaves.length - 1; i >= 0; i--) {
+        const sw = shockwaves[i];
+        sw.radius += 3.2;
+        sw.alpha -= 0.028;
+        if (sw.alpha <= 0 || sw.radius >= sw.maxRadius) {
+          shockwaves.splice(i, 1);
+          continue;
+        }
         ctx.save();
+        ctx.strokeStyle = sw.color;
+        ctx.globalAlpha = sw.alpha;
+        ctx.lineWidth = sw.lineWidth;
         ctx.beginPath();
-        ctx.setLineDash(lineDash);
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = lineWidth;
-        ctx.moveTo(src.x, src.y);
-        ctx.lineTo(tgt.x, tgt.y);
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
 
-      // Draw highlighted connected lines on TOP with vibrant glow & badges
-      for (const rel of highlightedLines) {
-        const src = nodeMap.get(rel.source)!;
-        const tgt = nodeMap.get(rel.target)!;
-
-        // Semantic colors for highlighted connections
-        let strokeColor = '#38bdf8'; // sky blue (evolution)
-        let typeBadgeBg = 'rgba(12, 44, 75, 0.95)';
-        let typeBadgeBorder = '#38bdf8';
-        let typeLabel = '传承/演进';
-        let lineDash: number[] = [];
-
-        if (rel.type === 'evolution') {
-          strokeColor = '#38bdf8';
-          typeBadgeBg = 'rgba(8, 47, 73, 0.95)';
-          typeBadgeBorder = '#38bdf8';
-          typeLabel = '传承';
-        } else if (rel.type === 'opposition') {
-          strokeColor = '#ef4444';
-          typeBadgeBg = 'rgba(69, 10, 10, 0.95)';
-          typeBadgeBorder = '#ef4444';
-          typeLabel = '对立';
-          lineDash = [6, 3];
-        } else if (rel.type === 'catalyst') {
-          strokeColor = '#f59e0b';
-          typeBadgeBg = 'rgba(69, 26, 3, 0.95)';
-          typeBadgeBorder = '#f59e0b';
-          typeLabel = '催生';
-          lineDash = [4, 3];
-        } else if (rel.type === 'fusion') {
-          strokeColor = '#10b981';
-          typeBadgeBg = 'rgba(6, 44, 31, 0.95)';
-          typeBadgeBorder = '#10b981';
-          typeLabel = '融合';
-        } else if (rel.type === 'dialectical') {
-          strokeColor = '#c084fc';
-          typeBadgeBg = 'rgba(46, 16, 75, 0.95)';
-          typeBadgeBorder = '#c084fc';
-          typeLabel = '辩证';
-          lineDash = [8, 3, 2, 3];
+      // Sparks
+      const sparks = sparksRef.current;
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const sp = sparks[i];
+        sp.x += sp.vx;
+        sp.y += sp.vy;
+        sp.vx *= 0.94;
+        sp.vy *= 0.94;
+        sp.alpha -= 0.026;
+        if (sp.alpha <= 0) {
+          sparks.splice(i, 1);
+          continue;
         }
-
         ctx.save();
-
-        // 1. Outer glow pass
+        ctx.fillStyle = sp.color;
+        ctx.globalAlpha = sp.alpha;
         ctx.beginPath();
-        ctx.strokeStyle = strokeColor;
-        ctx.shadowColor = strokeColor;
-        ctx.shadowBlur = 12;
-        ctx.lineWidth = 3.5;
-        ctx.setLineDash(lineDash);
-        ctx.moveTo(src.x, src.y);
-        ctx.lineTo(tgt.x, tgt.y);
-        ctx.stroke();
+        ctx.arc(sp.x, sp.y, sp.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
 
-        // 2. Crisp inner core line
-        ctx.beginPath();
-        ctx.strokeStyle = '#ffffff';
-        ctx.shadowBlur = 0;
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash(lineDash);
-        ctx.moveTo(src.x, src.y);
-        ctx.lineTo(tgt.x, tgt.y);
-        ctx.stroke();
+      // 7. Render Ideology Star Nodes
+      for (let i = 0; i < pNodes.length; i++) {
+        const node = pNodes[i];
+        const isSelected = selectedNodeId === node.id;
+        const isHovered = hoveredNode?.id === node.id;
+        const isHighlighted = highlightedNodeId === node.id;
+        const isConnected = connectedNodeIds.has(node.id);
 
-        // 3. Draw multiple traveling energy photon sparks along the line
-        for (let p = 0; p < 2; p++) {
-          const pulseOffset = ((time * 0.9) + p * 0.5) % 1;
-          const px = src.x + (tgt.x - src.x) * pulseOffset;
-          const py = src.y + (tgt.y - src.y) * pulseOffset;
-
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = strokeColor;
-          ctx.shadowBlur = 10;
-          ctx.beginPath();
-          ctx.arc(px, py, 3, 0, Math.PI * 2);
-          ctx.fill();
+        // Frustum culling check
+        if (
+          node.x < viewMinX ||
+          node.x > viewMaxX ||
+          node.y < viewMinY ||
+          node.y > viewMaxY
+        ) {
+          continue;
         }
 
-        // 4. Sleek, non-crowded Relationship Label Badge
-        const lineDist = Math.hypot(tgt.x - src.x, tgt.y - src.y);
+        // Filtering
+        let isDimmed = false;
+        if (filterCategory !== 'all' && node.data.category !== filterCategory) {
+          isDimmed = true;
+        }
+        if (searchQuery.trim()) {
+          const match =
+            node.data.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            node.data.englishName.toLowerCase().includes(searchQuery.toLowerCase());
+          if (!match) isDimmed = true;
+        }
+        if (activeId && !isConnected && !isSelected) {
+          isDimmed = true;
+        }
 
-        // Only draw badge if the line has enough space (>= 85px) to prevent clutter
-        if (lineDist >= 85) {
-          // Push badge towards the neighbor node (62% distance from active center node)
-          // so it NEVER collides with the active center node and its name!
-          const badgeRatio = activeId === src.id ? 0.62 : activeId === tgt.id ? 0.38 : 0.5;
-          const badgeX = src.x + (tgt.x - src.x) * badgeRatio;
-          const badgeY = src.y + (tgt.y - src.y) * badgeRatio;
+        const baseAlpha = isDimmed ? 0.18 : 1.0;
+        const starColor = node.data.color || '#38bdf8';
 
-          // Short, high-signal relation tag
-          const compactLabel = typeLabel;
+        // Star Core Glow
+        ctx.save();
+        ctx.globalAlpha = baseAlpha;
 
-          ctx.font = 'bold 10px "Plus Jakarta Sans", "Noto Serif SC", sans-serif';
-          const textMetrics = ctx.measureText(compactLabel);
-          const badgeW = textMetrics.width + 12;
-          const badgeH = 16;
-          const radius = 4;
-
+        // A. Primary Focused Star: Target Lock Reticle
+        if (isSelected || isHovered) {
           ctx.save();
-          ctx.translate(badgeX, badgeY);
-
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-          ctx.shadowBlur = 6;
-          ctx.fillStyle = typeBadgeBg;
-          ctx.strokeStyle = typeBadgeBorder;
-          ctx.lineWidth = 1.2;
-
+          const haloRadius = node.radius * 2.4;
+          const radial = ctx.createRadialGradient(node.x, node.y, 4, node.x, node.y, haloRadius);
+          radial.addColorStop(0, starColor);
+          radial.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+          radial.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = radial;
           ctx.beginPath();
-          ctx.roundRect(-badgeW / 2, -badgeH / 2, badgeW, badgeH, radius);
+          ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2);
           ctx.fill();
+
+          // 4-Corner Target Bracket Reticle [  ]
+          const bracketLen = 8;
+          const boxR = node.radius + 7;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+
+          // Top-left
+          ctx.beginPath();
+          ctx.moveTo(node.x - boxR, node.y - boxR + bracketLen);
+          ctx.lineTo(node.x - boxR, node.y - boxR);
+          ctx.lineTo(node.x - boxR + bracketLen, node.y - boxR);
           ctx.stroke();
 
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = '#ffffff';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(compactLabel, 0, 0);
+          // Top-right
+          ctx.beginPath();
+          ctx.moveTo(node.x + boxR - bracketLen, node.y - boxR);
+          ctx.lineTo(node.x + boxR, node.y - boxR);
+          ctx.lineTo(node.x + boxR, node.y - boxR + bracketLen);
+          ctx.stroke();
+
+          // Bottom-left
+          ctx.beginPath();
+          ctx.moveTo(node.x - boxR, node.y + boxR - bracketLen);
+          ctx.lineTo(node.x - boxR, node.y + boxR);
+          ctx.lineTo(node.x - boxR + bracketLen, node.y + boxR);
+          ctx.stroke();
+
+          // Bottom-right
+          ctx.beginPath();
+          ctx.moveTo(node.x + boxR - bracketLen, node.y + boxR);
+          ctx.lineTo(node.x + boxR, node.y + boxR);
+          ctx.lineTo(node.x + boxR, node.y + boxR - bracketLen);
+          ctx.stroke();
 
           ctx.restore();
         }
 
-        ctx.restore();
-      }
-
-      // 5. Render Constellation Star Nodes
-      // Sort nodes so highlighted and hovered ones render on top
-      const sortedNodes = [...pNodes].sort((a, b) => {
-        const aIsActive = a.id === activeId ? 2 : connectedNodeIds.has(a.id) ? 1 : 0;
-        const bIsActive = b.id === activeId ? 2 : connectedNodeIds.has(b.id) ? 1 : 0;
-        return aIsActive - bIsActive;
-      });
-
-      for (const node of sortedNodes) {
-        const isHovered = hoveredNode?.id === node.id;
-        const isSelected = selectedNodeId === node.id;
-        const isCenterActive = activeId === node.id;
-        const isDirectlyConnected = activeId && connectedNodeIds.has(node.id) && !isCenterActive;
-
-        const matchesCategory = filterCategory === 'all' || node.data.category === filterCategory;
-        const matchesSearch =
-          !searchQuery.trim() ||
-          node.data.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          node.data.englishName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          node.data.summary.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const isDimmed = activeId
-          ? !connectedNodeIds.has(node.id)
-          : !matchesCategory || !matchesSearch;
-
-        ctx.save();
-        ctx.translate(node.x, node.y);
-
-        const nodeColor = node.data.color;
-        const currentRadius = isCenterActive ? 20 : isDirectlyConnected ? 18 : 16;
-
-        // A. Primary Focused Node (Hovered or Selected)
-        if (isCenterActive) {
-          // Intense pulsating halo
-          const pulse = Math.sin(time * 3.5) * 4 + 32;
-          const haloGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, pulse);
-          haloGrad.addColorStop(0, `${nodeColor}bb`);
-          haloGrad.addColorStop(0.5, `${nodeColor}33`);
-          haloGrad.addColorStop(1, 'transparent');
-
-          ctx.beginPath();
-          ctx.fillStyle = haloGrad;
-          ctx.arc(0, 0, pulse, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Outer targeting reticle ring
-          ctx.beginPath();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.8;
-          ctx.setLineDash([4, 4]);
-          ctx.arc(0, 0, currentRadius + 7, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (isDirectlyConnected) {
-          // B. Direct Neighbor Nodes (Connected to Hovered/Selected)
-          ctx.beginPath();
-          ctx.strokeStyle = nodeColor;
-          ctx.shadowColor = nodeColor;
-          ctx.shadowBlur = 8;
-          ctx.lineWidth = 1.8;
-          ctx.arc(0, 0, currentRadius + 4, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-
-        // C. Star Core Disc
+        // B. Pulsing outer subtle ring
+        const pulse = Math.sin(time * 3 + i) * 0.15 + 0.85;
+        ctx.strokeStyle = isSelected || isHovered ? '#ffffff' : starColor;
+        ctx.lineWidth = isSelected ? 2 : 1;
         ctx.beginPath();
-        const coreGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, currentRadius);
-        if (isDimmed) {
-          coreGrad.addColorStop(0, '#57534e');
-          coreGrad.addColorStop(0.5, '#292524');
-          coreGrad.addColorStop(1, '#1c1917');
-          ctx.shadowBlur = 0;
-        } else {
-          coreGrad.addColorStop(0, '#ffffff');
-          coreGrad.addColorStop(0.35, nodeColor);
-          coreGrad.addColorStop(1, '#1c1917');
-          ctx.shadowColor = nodeColor;
-          ctx.shadowBlur = isCenterActive ? 20 : 8;
-        }
-        ctx.fillStyle = coreGrad;
-        ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Core hairline border
-        ctx.strokeStyle = isDimmed ? 'rgba(120, 113, 108, 0.15)' : 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 1;
+        ctx.arc(node.x, node.y, node.radius * (isSelected ? 1.25 : 1.1) * pulse, 0, Math.PI * 2);
         ctx.stroke();
 
-        // D. Node Label (Chinese Name) with legible backdrop pill
-        ctx.shadowBlur = 0;
-        ctx.font = isCenterActive
-          ? 'bold 13px "Noto Serif SC", serif'
-          : isDirectlyConnected
-          ? 'bold 12px "Noto Serif SC", serif'
-          : '500 11px "Noto Serif SC", serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        // C. Star Core Body (Stark White Core with Category Rim)
+        ctx.fillStyle = isSelected ? '#ffffff' : '#05070c';
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fill();
 
-        const nameMetrics = ctx.measureText(node.data.name);
-        const nameW = nameMetrics.width;
-        const pillY = currentRadius + 14;
+        ctx.strokeStyle = isSelected ? '#38bdf8' : starColor;
+        ctx.lineWidth = isSelected ? 2.5 : 1.8;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.stroke();
 
-        if (!isDimmed) {
-          // Translucent dark pill background
-          ctx.fillStyle = isCenterActive
-            ? 'rgba(12, 10, 9, 0.94)'
-            : isDirectlyConnected
-            ? 'rgba(12, 10, 9, 0.88)'
-            : 'rgba(12, 10, 9, 0.72)';
-          ctx.strokeStyle = isCenterActive
-            ? nodeColor
-            : isDirectlyConnected
-            ? 'rgba(255, 255, 255, 0.35)'
-            : 'rgba(120, 113, 108, 0.2)';
-          ctx.lineWidth = 1;
+        // Inner glowing starlight speck
+        ctx.fillStyle = isSelected ? '#000000' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, isSelected ? 4 : 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // D. Star Label & Telemetry Capsule
+        // Show labels when scale is sufficient or if active/hovered/connected
+        const showLabel = scale > 0.45 || isSelected || isHovered || isConnected;
+        if (showLabel) {
+          ctx.font = isSelected || isHovered
+            ? 'bold 12px "Plus Jakarta Sans", monospace'
+            : '11px "Plus Jakarta Sans", monospace';
+
+          const label = node.data.name;
+          const textWidth = ctx.measureText(label).width;
+          const badgeY = node.y + node.radius + 12;
+
+          // Softened Monochrome Pill Badge
+          ctx.fillStyle = isSelected
+            ? 'rgba(255, 255, 255, 0.95)'
+            : 'rgba(8, 10, 15, 0.85)';
+          ctx.strokeStyle = isSelected
+            ? '#38bdf8'
+            : isHovered
+            ? '#ffffff'
+            : 'rgba(255, 255, 255, 0.15)';
+          ctx.lineWidth = isSelected ? 1.5 : 1;
+
           ctx.beginPath();
-          ctx.roundRect(-nameW / 2 - 6, pillY - 10, nameW + 12, 20, 5);
+          ctx.roundRect(
+            node.x - textWidth / 2 - 7,
+            badgeY - 7,
+            textWidth + 14,
+            18,
+            6
+          );
           ctx.fill();
           ctx.stroke();
 
-          ctx.fillStyle = isCenterActive
-            ? '#ffffff'
-            : isDirectlyConnected
-            ? '#f5f5f4'
-            : '#e7e5e4';
-          ctx.fillText(node.data.name, 0, pillY);
-        } else {
-          ctx.fillStyle = 'rgba(120, 113, 108, 0.3)';
-          ctx.fillText(node.data.name, 0, pillY);
-        }
-
-        // Subtitle (English Name) ONLY for center active node when zoomed
-        if (isCenterActive && scale >= 0.75) {
-          ctx.font = '9px "Plus Jakarta Sans", sans-serif';
-          ctx.fillStyle = 'rgba(254, 240, 138, 0.9)';
-          ctx.fillText(node.data.englishName, 0, pillY + 16);
+          ctx.fillStyle = isSelected ? '#000000' : '#f4f4f5';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, node.x, badgeY + 2);
         }
 
         ctx.restore();
@@ -605,381 +699,412 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
     };
 
     animationFrameIdRef.current = requestAnimationFrame(render);
-
     return () => {
-      if (animationFrameIdRef.current) {
-        cancelAnimationFrame(animationFrameIdRef.current);
-      }
+      if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
     };
   }, [
     relationships,
     selectedNodeId,
-    highlightedNodeId,
     hoveredNode,
+    highlightedNodeId,
     filterCategory,
     searchQuery,
   ]);
 
-  // Coordinate conversion helper: Screen coordinates -> World coordinates
-  const screenToWorld = useCallback(
-    (screenX: number, screenY: number) => {
+  // Find node under screen coordinates (sx, sy)
+  const getNodeAtScreenPos = useCallback(
+    (sx: number, sy: number): PhysicsNode | null => {
       const { tx, ty, scale } = transformRef.current;
-      return {
-        x: (screenX - tx) / scale,
-        y: (screenY - ty) / scale,
-      };
+      const wx = (sx - tx) / scale;
+      const wy = (sy - ty) / scale;
+
+      const pNodes = physicsNodesRef.current;
+      for (let i = pNodes.length - 1; i >= 0; i--) {
+        const n = pNodes[i];
+        const distSq = (n.x - wx) * (n.x - wx) + (n.y - wy) * (n.y - wy);
+        const hitRadius = Math.max(n.radius + 10, 24);
+        if (distSq <= hitRadius * hitRadius) {
+          return n;
+        }
+      }
+      return null;
     },
     []
   );
 
-  // Mouse move handler: find node hit for hover & handle dragging
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+  // Mouse Move
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
 
-    setMousePos({ x: e.clientX, y: e.clientY });
-
-    // Handle Canvas Pan
-    if (isDraggingCanvasRef.current && !activeDraggedNodeRef.current) {
-      const dx = screenX - dragStartRef.current.x;
-      const dy = screenY - dragStartRef.current.y;
-      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-        isCanvasMovedRef.current = true;
+      // Canvas Dragging
+      if (isDraggingCanvasRef.current) {
+        const dx = sx - dragStartRef.current.x;
+        const dy = sy - dragStartRef.current.y;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          isCanvasMovedRef.current = true;
+        }
+        transformRef.current.tx += dx;
+        transformRef.current.ty += dy;
+        dragStartRef.current = { x: sx, y: sy };
+        setTelemetryCoords(
+          `${Math.round(transformRef.current.tx)}, ${Math.round(transformRef.current.ty)}`
+        );
+        return;
       }
-      transformRef.current.tx += dx;
-      transformRef.current.ty += dy;
-      dragStartRef.current = { x: screenX, y: screenY };
-      return;
-    }
 
-    // Handle Node Dragging
-    if (activeDraggedNodeRef.current) {
-      const world = screenToWorld(screenX, screenY);
-      activeDraggedNodeRef.current.x = world.x;
-      activeDraggedNodeRef.current.y = world.y;
-      activeDraggedNodeRef.current.targetX = world.x;
-      activeDraggedNodeRef.current.targetY = world.y;
-      return;
-    }
-
-    // Check hit test for hover with generous radius
-    const world = screenToWorld(screenX, screenY);
-    let hit: PhysicsNode | null = null;
-    for (const node of physicsNodesRef.current) {
-      const dist = Math.hypot(node.x - world.x, node.y - world.y);
-      if (dist <= node.radius + 8) {
-        hit = node;
-        break;
+      // Dragging a specific node
+      if (activeDraggedNodeRef.current) {
+        const node = activeDraggedNodeRef.current;
+        const { tx, ty, scale } = transformRef.current;
+        node.x = (sx - tx) / scale;
+        node.y = (sy - ty) / scale;
+        node.targetX = node.x;
+        node.targetY = node.y;
+        simEnergyRef.current = Math.max(simEnergyRef.current, 50);
+        return;
       }
-    }
 
-    if (hit) {
-      if (hoveredNode?.id !== hit.data.id) {
-        setHoveredNode(hit.data);
-        onHoverNode?.(hit.data.id);
+      // Hover Detection with 300ms dwell delay (protects user attention during camera/cursor movement)
+      const hit = getNodeAtScreenPos(sx, sy);
+      if (hit) {
+        if (canvasRef.current) canvasRef.current.style.cursor = 'pointer';
+
+        // If pointer is already lingering on this exact star, just update mouse position
+        if (pendingHoverNodeIdRef.current === hit.data.id) {
+          setMousePos({ x: e.clientX, y: e.clientY });
+          return;
+        }
+
+        // Star changed: clear any pending timer
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+          hoverTimeoutRef.current = null;
+        }
+
+        pendingHoverNodeIdRef.current = hit.data.id;
+        const targetNode = hit.data;
+        const targetX = e.clientX;
+        const targetY = e.clientY;
+
+        // Dwell delay of 300ms before popping up info HUD
+        hoverTimeoutRef.current = setTimeout(() => {
+          setHoveredNode(targetNode);
+          setMousePos({ x: targetX, y: targetY });
+          onHoverNode?.(targetNode);
+          hoverTimeoutRef.current = null;
+        }, 300);
+      } else {
+        // Pointer is in open space: immediately cancel pending hover timer and dismiss tooltip
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+          hoverTimeoutRef.current = null;
+        }
+        pendingHoverNodeIdRef.current = null;
+
+        if (hoveredNode) {
+          setHoveredNode(null);
+          setMousePos(null);
+          onHoverNode?.(null);
+        }
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
       }
-      canvas.style.cursor = 'pointer';
-    } else {
-      if (hoveredNode !== null) {
-        setHoveredNode(null);
-        onHoverNode?.(null);
-      }
-      canvas.style.cursor = isDraggingCanvasRef.current ? 'grabbing' : 'grab';
+    },
+    [getNodeAtScreenPos, hoveredNode, onHoverNode]
+  );
+
+  // Mouse Leave Canvas
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
     }
-  };
+    pendingHoverNodeIdRef.current = null;
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-
-    const world = screenToWorld(screenX, screenY);
-
-    // Check if clicked a node
-    let hit: PhysicsNode | null = null;
-    for (const node of physicsNodesRef.current) {
-      const dist = Math.hypot(node.x - world.x, node.y - world.y);
-      if (dist <= node.radius + 8) {
-        hit = node;
-        break;
-      }
+    if (hoveredNode) {
+      setHoveredNode(null);
+      setMousePos(null);
+      onHoverNode?.(null);
     }
+    isDraggingCanvasRef.current = false;
+    activeDraggedNodeRef.current = null;
+  }, [hoveredNode, onHoverNode]);
 
-    if (hit) {
-      activeDraggedNodeRef.current = hit;
-      hit.isDragging = true;
-      nodeDragStartScreenRef.current = { x: screenX, y: screenY };
-    } else {
-      isDraggingCanvasRef.current = true;
+  // Mouse Down
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      canvasMouseDownPosRef.current = { x: sx, y: sy };
       isCanvasMovedRef.current = false;
-      dragStartRef.current = { x: screenX, y: screenY };
-      canvasMouseDownPosRef.current = { x: screenX, y: screenY };
-      canvas.style.cursor = 'grabbing';
-    }
-  };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
+      const hit = getNodeAtScreenPos(sx, sy);
+      if (hit) {
+        activeDraggedNodeRef.current = hit;
+        hit.isDragging = true;
+        nodeDragStartScreenRef.current = { x: sx, y: sy };
+      } else {
+        isDraggingCanvasRef.current = true;
+        dragStartRef.current = { x: sx, y: sy };
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+      }
+    },
+    [getNodeAtScreenPos]
+  );
+
+  // Mouse Up & Click Selection
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      let isNodeDragTravel = false;
+      if (nodeDragStartScreenRef.current) {
+        const dx = sx - nodeDragStartScreenRef.current.x;
+        const dy = sy - nodeDragStartScreenRef.current.y;
+        if (Math.hypot(dx, dy) > 5) {
+          isNodeDragTravel = true;
+        }
+      }
+
+      // If user clicked on a node without drag travel
+      if (activeDraggedNodeRef.current && !isNodeDragTravel) {
+        const clickedNode = activeDraggedNodeRef.current;
+        triggerClickFeedback(clickedNode);
+        onSelectNode(clickedNode.data);
+      }
 
       if (activeDraggedNodeRef.current) {
         activeDraggedNodeRef.current.isDragging = false;
-
-        const start = nodeDragStartScreenRef.current;
-        const dragDist = start ? Math.hypot(screenX - start.x, screenY - start.y) : 0;
-
-        // Pure click (< 5px) triggers onSelectNode (opens details drawer)
-        // Dragging (>= 5px) only moves the star in space, does NOT auto-open modal!
-        if (dragDist < 5) {
-          onSelectNode(activeDraggedNodeRef.current.data);
-        }
-
         activeDraggedNodeRef.current = null;
-        nodeDragStartScreenRef.current = null;
-      } else if (isDraggingCanvasRef.current) {
-        // Calculate total travel from initial mouse down
-        const start = canvasMouseDownPosRef.current;
-        const totalTravel = start ? Math.hypot(screenX - start.x, screenY - start.y) : 0;
-
-        // CRITICAL FIX: Only if the user made a pure static click on empty space (< 5px and no drag delta)
-        // do we deselect. If the user was dragging/panning the constellation (totalTravel >= 5),
-        // NEVER exit the detail view!
-        if (totalTravel < 5 && !isCanvasMovedRef.current && selectedNodeId) {
-          onSelectNode(null);
-        }
-
-        canvasMouseDownPosRef.current = null;
-        isCanvasMovedRef.current = false;
       }
-    }
 
-    isDraggingCanvasRef.current = false;
-    if (canvas) {
-      canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
-    }
-  };
+      // If clicked empty space without dragging canvas
+      if (isDraggingCanvasRef.current && !isCanvasMovedRef.current) {
+        // deselect
+      }
 
-  // Zoom with Wheel
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+      isDraggingCanvasRef.current = false;
+      canvasMouseDownPosRef.current = null;
+      nodeDragStartScreenRef.current = null;
+      if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+    },
+    [triggerClickFeedback, onSelectNode]
+  );
+
+  // Mouse Wheel Zooming
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
+    const { tx, ty, scale } = transformRef.current;
+    const newScale = Math.max(0.18, Math.min(3.5, scale * zoomFactor));
+
+    transformRef.current.tx = mx - (mx - tx) * (newScale / scale);
+    transformRef.current.ty = my - (my - ty) * (newScale / scale);
+    transformRef.current.scale = newScale;
+
+    setTelemetryZoom(`${Math.round(newScale * 100)}%`);
+    setTelemetryCoords(
+      `${Math.round(transformRef.current.tx)}, ${Math.round(transformRef.current.ty)}`
+    );
+  }, []);
+
+  // UI Zoom Buttons
+  const handleZoom = (dir: 'in' | 'out') => {
+    const factor = dir === 'in' ? 1.25 : 0.8;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const { tx, ty, scale } = transformRef.current;
+    const newScale = Math.max(0.18, Math.min(3.5, scale * factor));
 
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    const oldScale = transformRef.current.scale;
-    const newScale = Math.min(2.5, Math.max(0.4, oldScale * zoomFactor));
-
-    // Zoom centered on cursor
-    transformRef.current.tx = screenX - (screenX - transformRef.current.tx) * (newScale / oldScale);
-    transformRef.current.ty = screenY - (screenY - transformRef.current.ty) * (newScale / oldScale);
+    transformRef.current.tx = cx - (cx - tx) * (newScale / scale);
+    transformRef.current.ty = cy - (cy - ty) * (newScale / scale);
     transformRef.current.scale = newScale;
+
+    setTelemetryZoom(`${Math.round(newScale * 100)}%`);
+    setTelemetryCoords(
+      `${Math.round(transformRef.current.tx)}, ${Math.round(transformRef.current.ty)}`
+    );
   };
 
-  // Reset View action
   const handleResetView = () => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     transformRef.current = {
       tx: rect.width / 2,
       ty: rect.height / 2,
-      scale: 0.95,
+      scale: 0.85,
     };
+    setTelemetryZoom('85%');
+    setTelemetryCoords(`${Math.round(rect.width / 2)}, ${Math.round(rect.height / 2)}`);
   };
 
-  const handleZoom = (direction: 'in' | 'out') => {
-    if (!canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
-    const factor = direction === 'in' ? 1.25 : 0.8;
-    const oldScale = transformRef.current.scale;
-    const newScale = Math.min(2.5, Math.max(0.4, oldScale * factor));
-
-    transformRef.current.tx = cx - (cx - transformRef.current.tx) * (newScale / oldScale);
-    transformRef.current.ty = cy - (cy - transformRef.current.ty) * (newScale / oldScale);
-    transformRef.current.scale = newScale;
+  const toggleMute = () => {
+    const next = !isAudioMuted;
+    setIsAudioMuted(next);
+    audioEngine.setMuted(next);
   };
 
-  // Find all directly connected relationships for hovered node
-  const hoveredLinks = hoveredNode
-    ? relationships.filter(
-        (r) => r.source === hoveredNode.id || r.target === hoveredNode.id
-      )
-    : [];
+  const hoveredLinks = useMemo(() => {
+    if (!hoveredNode) return [];
+    return relationships.filter(
+      (r) => r.source === hoveredNode.id || r.target === hoveredNode.id
+    );
+  }, [hoveredNode, relationships]);
 
-  // Set of connected nodes when in selected mode
-  const selectedConnectedIds = useMemo(() => {
-    if (!selectedNodeId) return null;
-    const set = new Set<string>([selectedNodeId]);
-    relationships.forEach((rel) => {
-      if (rel.source === selectedNodeId) set.add(rel.target);
-      if (rel.target === selectedNodeId) set.add(rel.source);
-    });
-    return set;
-  }, [selectedNodeId, relationships]);
-
-  // Only show hover HUD if:
-  // 1. In free exploration mode (!selectedNodeId)
-  // 2. OR when in selected mode, hovered node is the selected node itself or one of its directly connected highlighted stars
-  // Un-highlighted stars will NOT trigger the hover HUD card!
-  const shouldShowHoverHUD =
-    hoveredNode &&
-    mousePos &&
-    !activeDraggedNodeRef.current &&
-    (!selectedConnectedIds || selectedConnectedIds.has(hoveredNode.id));
+  const shouldShowHoverHUD = hoveredNode && (!selectedNodeId || selectedNodeId !== hoveredNode.id);
 
   return (
-    <div className="relative w-full h-full select-none overflow-hidden bg-stone-950">
+    <div className="relative w-full h-full overflow-hidden bg-black select-none">
       <canvas
         ref={canvasRef}
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
         className="w-full h-full block touch-none cursor-grab"
       />
 
-      {/* Floating Canvas Controls (Bottom Right) */}
-      <div className="absolute bottom-6 right-6 flex items-center gap-2 bg-stone-900/85 backdrop-blur-md border border-stone-800 rounded-lg p-1.5 shadow-xl z-20">
+      {/* Floating HUD Controls (Bottom Right) */}
+      <div className="absolute bottom-6 right-6 flex items-center gap-1.5 bg-zinc-950/85 backdrop-blur-xl border border-white/10 rounded-xl p-1.5 text-white font-mono z-20 text-xs shadow-xl">
+        <div className="px-2.5 py-1 text-[10px] text-zinc-400 border-r border-white/10 hidden sm:block">
+          ZOOM // {telemetryZoom}
+        </div>
+        <div className="px-2.5 py-1 text-[10px] text-zinc-400 border-r border-white/10 hidden sm:block">
+          POS // {telemetryCoords}
+        </div>
+        <button
+          onClick={toggleMute}
+          title={isAudioMuted ? '开启交互声效' : '静音交互声效'}
+          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+            isAudioMuted ? 'text-zinc-500 hover:text-zinc-300' : 'text-cyan-400 hover:text-white'
+          }`}
+        >
+          {isAudioMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+        </button>
         <button
           onClick={() => handleZoom('in')}
           title="放大 (Zoom In)"
-          className="w-8 h-8 flex items-center justify-center text-stone-300 hover:text-white hover:bg-stone-800 rounded transition-colors text-base"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
         >
           +
         </button>
         <button
           onClick={() => handleZoom('out')}
           title="缩小 (Zoom Out)"
-          className="w-8 h-8 flex items-center justify-center text-stone-300 hover:text-white hover:bg-stone-800 rounded transition-colors text-base"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
         >
           −
         </button>
-        <div className="w-[1px] h-4 bg-stone-700" />
         <button
           onClick={handleResetView}
-          title="重置全景视角 (Reset View)"
-          className="px-2.5 h-8 flex items-center justify-center text-xs font-medium text-stone-300 hover:text-white hover:bg-stone-800 rounded transition-colors whitespace-nowrap"
+          title="全景重置 (Reset View)"
+          className="px-2.5 h-7 rounded-lg flex items-center justify-center text-[10px] tracking-wider uppercase text-zinc-300 hover:text-white hover:bg-white/10 border-l border-white/10 transition-colors"
         >
-          全景重置
+          RESET
         </button>
       </div>
 
-      {/* Dynamic Hover HUD Card: Instant Glimpse of the Connected Constellation */}
+      {/* Hover HUD Card */}
       {shouldShowHoverHUD && hoveredNode && mousePos && (
         <div
-          className="pointer-events-none fixed z-30 w-80 bg-stone-900/95 border border-stone-700/90 rounded-xl p-4 shadow-2xl backdrop-blur-md transition-opacity duration-150"
+          className="pointer-events-none fixed z-30 w-80 bg-zinc-950/95 border border-white/10 rounded-xl p-4 shadow-2xl backdrop-blur-xl font-sans text-white transition-opacity duration-150"
           style={{
             left: `${Math.min(window.innerWidth - 340, mousePos.x + 22)}px`,
             top: `${Math.min(window.innerHeight - 280, mousePos.y + 22)}px`,
           }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-2 pb-2 border-b border-stone-800">
+          <div className="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
             <div className="flex items-center gap-2">
               <span
-                className="w-3 h-3 rounded-full shadow-lg"
+                className="w-2.5 h-2.5 rounded-full"
                 style={{
                   backgroundColor: hoveredNode.color,
                   boxShadow: `0 0 10px ${hoveredNode.color}`,
                 }}
               />
-              <h4 className="text-base font-bold text-stone-100 font-serif-sc">
+              <h4 className="text-sm font-bold tracking-wide font-mono">
                 {hoveredNode.name}
               </h4>
             </div>
-            <span className="text-[11px] text-stone-400 font-mono">
+            <span className="text-[10px] text-zinc-400 font-mono">
               {hoveredNode.period.split('（')[0]}
             </span>
           </div>
 
-          {/* 1-sentence bottom-line essence */}
-          <p className="text-xs text-stone-300 leading-relaxed mb-3">
+          <p className="text-xs text-zinc-300 leading-relaxed mb-3">
             {hoveredNode.summary}
           </p>
 
-          {/* Connected isms mini tags */}
           {hoveredLinks.length > 0 && (
-            <div className="space-y-1.5 pt-1 border-t border-stone-800/80">
-              <div className="flex items-center justify-between text-[10px] font-semibold text-amber-400/90 tracking-wider uppercase">
-                <span>星网直连 ({hoveredLinks.length} 派)</span>
-                <span>连线已在画布高亮</span>
+            <div className="space-y-1.5 pt-1.5 border-t border-white/10">
+              <div className="flex items-center justify-between text-[9px] font-mono tracking-widest text-zinc-400 uppercase">
+                <span>CONSTELLATION NETWORK ({hoveredLinks.length})</span>
+                <span className="text-cyan-400">ACTIVE</span>
               </div>
-              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+              <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
                 {hoveredLinks.slice(0, 5).map((rel) => {
                   const otherId = rel.source === hoveredNode.id ? rel.target : rel.source;
                   const otherNode = nodes.find((n) => n.id === otherId);
                   if (!otherNode) return null;
 
-                  let borderCol = 'border-sky-500/50 text-sky-300 bg-sky-950/40';
-                  if (rel.type === 'opposition') borderCol = 'border-red-500/50 text-red-300 bg-red-950/40';
-                  else if (rel.type === 'catalyst') borderCol = 'border-amber-500/50 text-amber-300 bg-amber-950/40';
-                  else if (rel.type === 'fusion') borderCol = 'border-emerald-500/50 text-emerald-300 bg-emerald-950/40';
-                  else if (rel.type === 'dialectical') borderCol = 'border-purple-500/50 text-purple-300 bg-purple-950/40';
-
                   return (
                     <span
                       key={rel.id}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border ${borderCol} flex items-center gap-1`}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-md border border-white/10 bg-white/5 text-zinc-300 flex items-center gap-1"
                     >
-                      <span className="font-semibold">{otherNode.name}</span>
-                      <span className="opacity-75 text-[9px]">({rel.label})</span>
+                      <span>{otherNode.name}</span>
+                      <span className="opacity-60 text-[9px]">[{rel.label}]</span>
                     </span>
                   );
                 })}
-                {hoveredLinks.length > 5 && (
-                  <span className="text-[10px] text-stone-500 px-1 py-0.5">
-                    +{hoveredLinks.length - 5}
-                  </span>
-                )}
               </div>
             </div>
           )}
 
-          <div className="mt-3 pt-2 border-t border-stone-800 flex items-center justify-between text-[11px] text-amber-400">
-            <span>点击展开全维思想档案</span>
+          <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] font-mono tracking-wider text-cyan-400 uppercase">
+            <span>CLICK TO LOCK TARGET & OPEN DOSSIER</span>
             <span>→</span>
           </div>
         </div>
       )}
 
-      {/* Star Constellation Legend Overlay (Bottom Left) */}
-      <div className="absolute bottom-6 left-6 hidden md:flex flex-col gap-2 bg-stone-900/85 backdrop-blur-md border border-stone-800 rounded-lg p-3 text-xs text-stone-400 z-10 max-w-sm">
-        <span className="text-[11px] font-semibold text-stone-300 tracking-wider uppercase">
-          关系脉络连线图例
-        </span>
+      {/* Telemetry Legend (Bottom Left) */}
+      <div className="absolute bottom-6 left-6 hidden md:flex flex-col gap-2 bg-zinc-950/85 backdrop-blur-xl border border-white/10 rounded-xl p-3.5 text-xs text-zinc-400 z-10 max-w-xs font-mono shadow-xl">
+        <div className="flex items-center justify-between border-b border-white/10 pb-1.5 text-[10px] text-white tracking-widest uppercase">
+          <span>SYS // RELATION LOGIC</span>
+          <span className="text-cyan-400">NOMINAL</span>
+        </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
           <div className="flex items-center gap-2">
-            <span className="w-4 h-[2px] bg-sky-400 inline-block shadow-sm shadow-sky-400" />
-            <span>传承 / 演进</span>
+            <span className="w-3.5 h-[2px] bg-cyan-400 shadow-sm shadow-cyan-400" />
+            <span className="text-zinc-300">传承 / 演进</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-4 h-[2px] border-b border-dashed border-red-500 inline-block" />
-            <span>对立 / 批判</span>
+            <span className="w-3.5 h-[2px] border-b border-dashed border-rose-500" />
+            <span className="text-zinc-300">对立 / 批判</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-4 h-[2px] border-b border-dotted border-amber-400 inline-block" />
-            <span>催生 / 反拨</span>
+            <span className="w-3.5 h-[2px] border-b border-dotted border-white" />
+            <span className="text-zinc-300">催生 / 反拨</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-4 h-[2px] bg-emerald-500 inline-block" />
-            <span>融合 / 交汇</span>
+            <span className="w-3.5 h-[2px] bg-emerald-400" />
+            <span className="text-zinc-300">融合 / 交汇</span>
           </div>
         </div>
-        <p className="text-[10px] text-stone-500 mt-1 border-t border-stone-800 pt-1.5 leading-normal">
-          悬停星辰即刻照亮其所有思想连线与关系标签；拖拽星体可调整星图引力；滚轮缩放。
-        </p>
       </div>
     </div>
   );

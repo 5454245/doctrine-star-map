@@ -4,28 +4,66 @@
   :root {
     --font-serif: 'Noto Serif SC', 'Cinzel', serif;
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+    /* === 宇宙深空高级深色设计系统 (Cosmic Dark Design System) === */
+    /* 1. 虚空基底与暗影灰阶 (Void Blacks & Shadow Grays) */
+    --color-void-black: #020408;        /* 极致深邃宇宙纯黑，底色沉稳不发灰 */
+    --color-deep-space: #060913;        /* 深空次级底色 */
+    --color-surface-panel: #0a0f1d;     /* 悬浮面板与抽屉底层 */
+    --color-shadow-gray-950: #070b14;   /* 极暗容器底色 */
+    --color-shadow-gray-900: #0d1424;   /* 卡片背景与遥测HUD */
+    --color-shadow-gray-800: #151f36;   /* 交互悬停层与高亮背景 */
+    --color-shadow-gray-700: #22304d;   /* 结构微光边框 */
+    --color-shadow-gray-500: #4b5d7e;   /* 弱化分割线与辅助图标 */
+    --color-shadow-gray-400: #94a3b8;   /* 遥测参数与次级注释 */
+
+    /* 2. 璀璨星光高反差色阶 (Starlight Whites) */
+    --color-star-white: #f8fafc;        /* 璀璨星光纯白 (主标题与焦点文字，高对比度) */
+    --color-star-silver: #e2e8f0;       /* 月华银白 (正文与主要标签) */
+    --color-star-mist: #94a3b8;         /* 晨星迷雾灰 (时间纪元与分类注释) */
+    --color-star-faint: rgba(248, 250, 252, 0.45); /* 弱化标尺微光 */
+
+    /* 3. 主义专属强调色系 (Ideology Accent Palette) */
+    --color-accent-cyan: #38bdf8;       /* 理性主义 / 逻辑实证 / 科技蓝 */
+    --color-accent-amber: #f59e0b;      /* 自由主义 / 自由意志 / 启蒙金 */
+    --color-accent-crimson: #ef4444;    /* 马克思主义 / 共产主义 / 革命赤红 */
+    --color-accent-rose: #f43f5e;       /* 社会民主主义 / 玫瑰红 */
+    --color-accent-emerald: #10b981;    /* 生态主义 / 绿色政治 / 翠绿 */
+    --color-accent-violet: #a855f7;     /* 唯心主义 / 观念论 / 以太紫 */
+    --color-accent-orange: #f97316;     /* 存在主义 / 荒谬主义 / 焦橙 */
+    --color-accent-abyss: #7c3aed;      /* 虚无主义 / 悲观主义 / 深渊紫 */
+    --color-accent-teal: #0d9488;       /* 东方哲学 / 禅道 / 天青玉色 */
+    --color-accent-navy: #2563eb;       /* 保守主义 / 传统主义 / 皇家蓝 */
+
+    /* 4. 微光边框与景深光效 (Luminous Glows & Borders) */
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.16);
+    --border-highlight: rgba(56, 189, 248, 0.45);
+    --glow-cyan: 0 0 25px rgba(56, 189, 248, 0.25);
+    --glow-star: 0 0 16px rgba(248, 250, 252, 0.35);
+    --glow-amber: 0 0 20px rgba(245, 158, 11, 0.25);
   }
   
   body {
     font-family: var(--font-sans);
-    background-color: #0c0a09;
-    color: #f5f5f4;
+    background-color: var(--color-void-black);
+    color: var(--color-star-white);
   }
 
-  /* Custom subtle dark scrollbars */
+  /* Minimalist Cosmic Scrollbars */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
-    background: rgba(28, 25, 23, 0.6);
+    background: var(--color-void-black);
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(120, 113, 108, 0.4);
+    background: rgba(255, 255, 255, 0.16);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(168, 162, 158, 0.6);
+    background: rgba(255, 255, 255, 0.35);
   }
 }
 
@@ -35,4 +73,37 @@
 
 .font-cinzel {
   font-family: 'Cinzel', serif;
+}
+
+/* Custom Design System Utility Classes */
+.bg-void {
+  background-color: var(--color-void-black);
+}
+
+.bg-surface-panel {
+  background-color: var(--color-surface-panel);
+}
+
+.bg-shadow-900 {
+  background-color: var(--color-shadow-gray-900);
+}
+
+.text-star-white {
+  color: var(--color-star-white);
+}
+
+.text-star-silver {
+  color: var(--color-star-silver);
+}
+
+.text-star-mist {
+  color: var(--color-star-mist);
+}
+
+.border-cosmic {
+  border-color: var(--border-subtle);
+}
+
+.border-cosmic-highlight {
+  border-color: var(--border-highlight);
 }

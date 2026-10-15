@@ -34,9 +34,15 @@ export default function App() {
     setSelectedNode(node);
     if (node) {
       setFlyToNodeId(node.id);
-      // Keep user in their chosen view (timeline, compass, or constellation)
-      // to allow localized exploration and positioning
     }
+  };
+
+  // Specifically when clicking another ism inside the Detail Modal:
+  // Ensures constellation view is active and smoothly centers the target star in the visible viewport
+  const handleSelectNodeFromDetail = (node: IsmNode) => {
+    setSelectedNode(node);
+    setFlyToNodeId(node.id);
+    setCurrentView('constellation');
   };
 
   // Open comparison modal
@@ -53,7 +59,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-stone-950 text-stone-100 font-sans">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--color-void-black)] text-[var(--color-star-white)] font-sans selection:bg-[var(--color-star-white)] selection:text-[var(--color-void-black)]">
       {/* 1. Universal Top Navigation Bar (3-Zone Contract) */}
       <TopNav
         currentView={currentView}
@@ -108,6 +114,7 @@ export default function App() {
             nodes={ISMS_DATA}
             searchQuery={searchQuery}
             selectedNodeId={selectedNode?.id || null}
+            filterCategory={filterCategory}
             onSelectNode={handleSelectNode}
           />
         )}
@@ -119,8 +126,8 @@ export default function App() {
             allNodes={ISMS_DATA}
             relationships={ISM_RELATIONSHIPS}
             onClose={() => setSelectedNode(null)}
-            onSelectNode={handleSelectNode}
-            onOpenCompare={(nodeA, nodeB) => handleOpenCompare(nodeA, nodeB)}
+            onSelectNode={handleSelectNodeFromDetail}
+            onOpenCompare={(nodeA) => handleOpenCompare(nodeA)}
             onOpenMusic={(node) => handleOpenMusic(node)}
           />
         )}
@@ -128,12 +135,11 @@ export default function App() {
         {/* 5. Ideology Comparison & Dialectic Modal */}
         {isCompareOpen && (
           <IsmComparisonModal
-            nodeA={compareNodes.nodeA}
-            nodeB={compareNodes.nodeB}
+            initialNodeA={compareNodes.nodeA}
+            initialNodeB={compareNodes.nodeB}
             allNodes={ISMS_DATA}
             relationships={ISM_RELATIONSHIPS}
             onClose={() => setIsCompareOpen(false)}
-            onSelectNode={handleSelectNode}
           />
         )}
 

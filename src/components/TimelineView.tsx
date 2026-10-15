@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { IsmNode, IsmRelationship, CategoryType } from '../types/ism';
-import { Sparkles, ArrowRight, Clock, Search, Target, Compass } from 'lucide-react';
+import { ArrowRight, Clock, Search, Target } from 'lucide-react';
 
 interface TimelineViewProps {
   nodes: IsmNode[];
   relationships: IsmRelationship[];
-  searchQuery?: string;
-  selectedNodeId?: string | null;
-  filterCategory?: CategoryType | 'all';
+  selectedNodeId: string | null;
+  filterCategory: CategoryType | 'all';
+  searchQuery: string;
   onSelectNode: (node: IsmNode) => void;
 }
 
@@ -22,121 +22,130 @@ interface EpochGroup {
 export const TimelineView: React.FC<TimelineViewProps> = ({
   nodes,
   relationships,
-  searchQuery = '',
   selectedNodeId,
-  filterCategory = 'all',
+  filterCategory,
+  searchQuery,
   onSelectNode,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Filter nodes based on category first
-  const categoryFilteredNodes = useMemo(() => {
-    if (filterCategory === 'all') return nodes;
-    return nodes.filter((n) => n.category === filterCategory);
+  // Filter nodes according to active category and search
+  const filteredNodes = useMemo(() => {
+    return nodes.filter((node) => {
+      if (filterCategory !== 'all' && node.category !== filterCategory) {
+        return false;
+      }
+      return true;
+    });
   }, [nodes, filterCategory]);
 
-  // Group nodes chronologically into 5 historical epochs
-  const epochs: EpochGroup[] = useMemo(() => {
-    return [
+  // Group nodes into chronological epochs
+  const epochs = useMemo(() => {
+    const list: EpochGroup[] = [
       {
         id: 'ancient',
-        epochName: '古代与古典源流',
-        timeRange: '公元前300年 - 公元1500年',
-        description: '城邦政治哲学、自然神圣秩序、沉思德性与早期人文觉醒',
-        nodes: categoryFilteredNodes
-          .filter((n) => n.eraYear < 1600)
-          .sort((a, b) => a.eraYear - b.eraYear),
+        epochName: '古典与轴心时代 // AXIAL AGE',
+        timeRange: '公元前 800 年 – 公元 500 年',
+        description: '苏格拉底、柏拉图、亚里士多德与诸子百家奠定人类本体论与伦理学最初基石。',
+        nodes: [],
+      },
+      {
+        id: 'medieval',
+        epochName: '中世纪与信仰思辨 // SCHOLASTIC ERA',
+        timeRange: '500 年 – 1500 年',
+        description: '神学唯名论与实在论大论战，经院哲学与阿拉伯理性复兴。',
+        nodes: [],
       },
       {
         id: 'enlightenment',
-        epochName: '理性与启蒙曙光',
-        timeRange: '17世纪 - 18世纪末',
-        description: '科学革命、理性法庭、社会契约与近代资本主义萌芽',
-        nodes: categoryFilteredNodes
-          .filter((n) => n.eraYear >= 1600 && n.eraYear < 1800)
-          .sort((a, b) => a.eraYear - b.eraYear),
+        epochName: '理性启蒙与近代科学 // AGE OF REASON',
+        timeRange: '1500 年 – 1800 年',
+        description: '经验主义、唯理论、社会契约论诞生，笛卡尔与康德重构人类理性边界。',
+        nodes: [],
       },
       {
-        id: 'industrial',
-        epochName: '工业狂飙与大革命时代',
-        timeRange: '19世纪 (1800 - 1899)',
-        description: '机器大工业异化、阶级斗争、浪漫主义反叛与虚无深渊的揭幕',
-        nodes: categoryFilteredNodes
-          .filter((n) => n.eraYear >= 1800 && n.eraYear < 1900)
-          .sort((a, b) => a.eraYear - b.eraYear),
+        id: '19th',
+        epochName: '19世纪大工业与思潮裂变 // INDUSTRIAL CRUCIBLE',
+        timeRange: '1800 年 – 1900 年',
+        description: '德国古典哲学、唯物辩证法、功利主义、浪漫主义与意志哲学激烈交锋。',
+        nodes: [],
       },
       {
-        id: 'wars_coldwar',
-        epochName: '两次大战与冷战争锋',
-        timeRange: '20世纪前半至中叶 (1900 - 1970)',
-        description: '极权灾难的反思、存在主义抉择、福利国家实践与现代主义秩序',
-        nodes: categoryFilteredNodes
-          .filter((n) => n.eraYear >= 1900 && n.eraYear < 1970)
-          .sort((a, b) => a.eraYear - b.eraYear),
+        id: 'early_20th',
+        epochName: '20世纪前半叶危局与重构 // MODERN CRISIS',
+        timeRange: '1900 年 – 1950 年',
+        description: '现象学、逻辑实证主义、早期存在主义、法兰克福学派与现代极权批判。',
+        nodes: [],
       },
       {
-        id: 'postmodern_ai',
-        epochName: '后现代与数字智能时代',
-        timeRange: '20世纪末至今 (1970 - 2026+)',
-        description: '宏大叙事解体、新自由主义全球化、气候焦虑与硅基AI奇点狂想',
-        nodes: categoryFilteredNodes
-          .filter((n) => n.eraYear >= 1970)
-          .sort((a, b) => a.eraYear - b.eraYear),
+        id: 'post_war',
+        epochName: '后现代解构与冷战时代 // POSTMODERN DISPERSION',
+        timeRange: '1950 年 – 2000 年',
+        description: '结构主义、解构主义、后殖民主义、女性主义与新自由主义全球扩展。',
+        nodes: [],
+      },
+      {
+        id: 'digital',
+        epochName: '21世纪数字智能与当代激进思潮 // CYBER & ANTHROPOCENE',
+        timeRange: '2000 年 – 至今',
+        description: '赛博控制论、加速主义、推测实在论、超人类主义与人工智能生存伦理。',
+        nodes: [],
       },
     ];
-  }, [categoryFilteredNodes]);
 
-  // Determine which nodes match search query
+    filteredNodes.forEach((node) => {
+      const year = node.eraYear ?? 1850;
+      if (year < 500) {
+        list[0].nodes.push(node);
+      } else if (year < 1500) {
+        list[1].nodes.push(node);
+      } else if (year < 1800) {
+        list[2].nodes.push(node);
+      } else if (year < 1900) {
+        list[3].nodes.push(node);
+      } else if (year < 1950) {
+        list[4].nodes.push(node);
+      } else if (year < 2000) {
+        list[5].nodes.push(node);
+      } else {
+        list[6].nodes.push(node);
+      }
+    });
+
+    list.forEach((epoch) => {
+      epoch.nodes.sort((a, b) => (a.eraYear ?? 1800) - (b.eraYear ?? 1800));
+    });
+
+    return list.filter((ep) => ep.nodes.length > 0);
+  }, [filteredNodes]);
+
+  // Set of matched node IDs
   const queryLower = searchQuery.trim().toLowerCase();
   const matchedNodeIds = useMemo(() => {
     if (!queryLower) return new Set<string>();
-    const matched = new Set<string>();
-    for (const node of categoryFilteredNodes) {
+    const set = new Set<string>();
+    filteredNodes.forEach((node) => {
       const match =
         node.name.toLowerCase().includes(queryLower) ||
         node.englishName.toLowerCase().includes(queryLower) ||
         node.summary.toLowerCase().includes(queryLower) ||
         node.elevatorPitch.toLowerCase().includes(queryLower) ||
-        node.keyThinkers.some((t) => t.name.toLowerCase().includes(queryLower)) ||
-        (node.coreTenets && node.coreTenets.some((t) => t.toLowerCase().includes(queryLower)));
-      if (match) {
-        matched.add(node.id);
-      }
-    }
-    return matched;
-  }, [queryLower, categoryFilteredNodes]);
+        node.keyThinkers.some((t) => t.name.toLowerCase().includes(queryLower));
+      if (match) set.add(node.id);
+    });
+    return set;
+  }, [filteredNodes, queryLower]);
 
-  // Auto-scroll to selectedNodeId or first search match
+  // Scroll to selected node card if selected
   useEffect(() => {
-    let targetId: string | null = null;
-
-    if (selectedNodeId && cardRefs.current.has(selectedNodeId)) {
-      targetId = selectedNodeId;
-    } else if (queryLower && matchedNodeIds.size > 0) {
-      // Find the first matched node in chronological order
-      for (const epoch of epochs) {
-        const found = epoch.nodes.find((n) => matchedNodeIds.has(n.id));
-        if (found) {
-          targetId = found.id;
-          break;
-        }
-      }
+    if (!selectedNodeId) return;
+    const cardEl = cardRefs.current.get(selectedNodeId);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+  }, [selectedNodeId]);
 
-    if (targetId) {
-      const el = cardRefs.current.get(targetId);
-      if (el) {
-        // Delay slightly to ensure layout rendering
-        const timer = setTimeout(() => {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 80);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [selectedNodeId, queryLower, matchedNodeIds, epochs]);
-
-  // Quick jump to epoch
   const handleJumpToEpoch = (epochId: string) => {
     const el = document.getElementById(`epoch-${epochId}`);
     if (el) {
@@ -147,47 +156,47 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full overflow-y-auto bg-stone-950 px-4 md:px-12 py-8 scroll-smooth"
+      className="w-full h-full overflow-y-auto bg-black px-4 md:px-12 py-8 scroll-smooth font-sans text-white"
     >
       <div className="max-w-5xl mx-auto space-y-10">
         {/* Intro Banner */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-400">
+        <div className="text-center space-y-3 font-mono">
+          <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-cyan-400">
             <Clock className="w-3.5 h-3.5" />
-            <span>思想演化时间线 · 历史长河定位</span>
+            <span>CHRONOLOGY // 思想流派历史长河</span>
           </div>
-          <h2 className="text-3xl font-bold font-serif-sc text-stone-100">
-            人类意识形态演进史诗
+          <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-white">
+            IDEOLOGY EVOLUTION CHRONOLOGY
           </h2>
-          <p className="text-stone-400 text-sm max-w-2xl mx-auto leading-relaxed">
+          <p className="text-zinc-400 text-xs max-w-2xl mx-auto leading-relaxed font-sans">
             任何一种“主义”都是特定历史危机的产物。在时间长河中搜索、回溯与定位每一个思想流派的诞生原点与传承演进。
           </p>
 
-          {/* Quick Epoch Jump Bar & Search Status Indicator */}
+          {/* Quick Epoch Jump Bar */}
           <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
             {epochs.map((ep) => (
               <button
                 key={ep.id}
                 type="button"
                 onClick={() => handleJumpToEpoch(ep.id)}
-                className="px-3 py-1.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 text-stone-300 hover:text-white border border-stone-800 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-3.5 py-1.5 bg-zinc-950/80 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 hover:border-white/30 rounded-lg text-xs font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm"
               >
-                <span>{ep.epochName}</span>
-                <span className="text-[10px] text-amber-400/80 font-mono">({ep.nodes.length})</span>
+                <span>{ep.epochName.split('//')[0]}</span>
+                <span className="text-[10px] text-cyan-400">[{ep.nodes.length}]</span>
               </button>
             ))}
           </div>
 
-          {/* Search Result Feedback Badge */}
+          {/* Search Feedback Badge */}
           {queryLower && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mt-2">
-              <Search className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-white/10 border border-white/20 rounded-lg text-white text-xs mt-2 font-mono shadow-sm">
+              <Search className="w-3.5 h-3.5 text-cyan-400" />
               <span>
-                在历史长河中匹配到 <strong className="text-white font-mono">{matchedNodeIds.size}</strong> 个思想流派
+                MATCHED NODES: <strong className="text-white font-bold">{matchedNodeIds.size}</strong>
               </span>
               {selectedNodeId && (
-                <span className="text-stone-400 border-l border-amber-500/30 pl-2">
-                  已定位选定节点
+                <span className="text-zinc-400 border-l border-white/20 pl-2">
+                  TARGET LOCKED
                 </span>
               )}
             </div>
@@ -195,23 +204,23 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         </div>
 
         {/* Epoch Segments */}
-        <div className="relative border-l border-stone-800 ml-4 md:ml-32 pl-6 md:pl-10 space-y-16">
+        <div className="relative border-l border-white/15 ml-4 md:ml-32 pl-6 md:pl-10 space-y-16">
           {epochs.map((epoch) => (
             <div key={epoch.id} id={`epoch-${epoch.id}`} className="relative scroll-mt-6">
               {/* Epoch node indicator */}
-              <div className="absolute -left-[31px] md:-left-[47px] top-1.5 w-5 h-5 rounded-full bg-stone-900 border-2 border-amber-500/80 shadow-lg shadow-amber-500/20 flex items-center justify-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <div className="absolute -left-[31px] md:-left-[47px] top-1.5 w-4 h-4 rounded-full bg-black border-2 border-white shadow-lg flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
               </div>
 
               {/* Epoch Label */}
-              <div className="mb-6">
-                <div className="text-xs font-mono text-amber-400/90 tracking-wider">
-                  {epoch.timeRange}
+              <div className="mb-6 font-mono">
+                <div className="text-xs text-cyan-400 tracking-widest uppercase">
+                  ERA // {epoch.timeRange}
                 </div>
-                <h3 className="text-xl font-bold text-stone-100 font-serif-sc mt-0.5">
+                <h3 className="text-lg font-bold text-white uppercase tracking-wider mt-0.5">
                   {epoch.epochName}
                 </h3>
-                <p className="text-xs text-stone-400 mt-1">
+                <p className="text-xs text-zinc-400 mt-1 font-sans">
                   {epoch.description}
                 </p>
               </div>
@@ -234,22 +243,21 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                         else cardRefs.current.delete(node.id);
                       }}
                       onClick={() => onSelectNode(node)}
-                      className={`group p-5 rounded-xl transition-all cursor-pointer shadow-sm flex flex-col justify-between ${
+                      className={`group p-5 rounded-xl transition-all cursor-pointer flex flex-col justify-between ${
                         isSelected
-                          ? 'bg-amber-950/40 border-2 border-amber-400 ring-4 ring-amber-400/20 shadow-2xl scale-[1.01]'
+                          ? 'bg-zinc-900 border-2 border-cyan-400 ring-2 ring-cyan-400/30 shadow-2xl'
                           : isMatched
-                          ? 'bg-amber-950/20 border-2 border-amber-500/70 ring-2 ring-amber-500/20 shadow-lg'
+                          ? 'bg-zinc-950 border-2 border-cyan-400/80 shadow-lg'
                           : isDimmed
-                          ? 'opacity-35 bg-stone-900/30 border border-stone-800/50 hover:opacity-80'
-                          : 'bg-stone-900/60 hover:bg-stone-800/80 border border-stone-800 hover:border-stone-700 hover:shadow-xl'
+                          ? 'opacity-30 bg-black/40 border border-white/5 hover:opacity-80'
+                          : 'bg-zinc-950/70 hover:bg-white/5 border border-white/10 hover:border-white/30 shadow-sm'
                       }`}
                     >
                       <div>
-                        {/* Highlight & Positioning Badge */}
                         {(isSelected || isMatched) && (
-                          <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-400 mb-2 font-mono">
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-cyan-400 mb-2 uppercase tracking-widest">
                             <Target className="w-3.5 h-3.5 animate-pulse" />
-                            <span>{isSelected ? '当前正在查看档案' : '搜索匹配命中定位'}</span>
+                            <span>{isSelected ? 'TARGET LOCKED // 当前档案' : 'SEARCH HIT // 命中定位'}</span>
                           </div>
                         )}
 
@@ -260,32 +268,33 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                               style={{ backgroundColor: node.color }}
                             />
                             <h4
-                              className={`text-base font-bold font-serif-sc transition-colors ${
+                              className={`text-sm font-bold font-mono transition-colors ${
                                 isSelected || isMatched
-                                  ? 'text-amber-300'
-                                  : 'text-stone-100 group-hover:text-amber-300'
+                                  ? 'text-white'
+                                  : 'text-zinc-200 group-hover:text-white'
                               }`}
                             >
                               {node.name}
                             </h4>
-                            <span className="text-xs text-stone-400 font-sans truncate max-w-[140px]">
-                              {node.englishName}
+                            <span className="text-[11px] text-zinc-500 font-mono truncate max-w-[130px]">
+                              [{node.englishName}]
                             </span>
                           </div>
-                          <span className="text-[11px] text-stone-500 font-mono shrink-0">
+                          <span className="text-[10px] text-zinc-500 font-mono shrink-0">
                             {node.period.split('（')[0]}
                           </span>
                         </div>
 
-                        <p className="text-xs text-stone-300 leading-relaxed mb-3">
+                        <p className="text-xs text-zinc-400 leading-relaxed mb-3 font-sans">
                           {node.summary}
                         </p>
                       </div>
 
-                      <div className="pt-3 border-t border-stone-800/80 flex items-center justify-between text-[11px] text-stone-400">
-                        <span>关联 {nodeLinks.length} 条思想星轨</span>
-                        <span className="text-amber-400/90 font-medium flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                          进入星辰档案 <ArrowRight className="w-3 h-3" />
+                      <div className="pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+                        <span>LINKS // {nodeLinks.length}</span>
+                        <span className="text-zinc-400 group-hover:text-white font-medium flex items-center gap-1 transition-colors">
+                          <span>OPEN DOSSIER</span>
+                          <ArrowRight className="w-3 h-3" />
                         </span>
                       </div>
                     </div>

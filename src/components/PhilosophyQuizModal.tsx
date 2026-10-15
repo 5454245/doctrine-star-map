@@ -334,29 +334,29 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
   const diagnosis = isCompleted ? calculateDiagnosis() : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">
-      <div className="w-full max-w-2xl bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <div className="w-full max-w-2xl bg-zinc-950/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh] font-sans text-white">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-stone-800 flex items-center justify-between shrink-0 bg-stone-900/95">
+        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-black/60 font-mono">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-cyan-400">
               <Compass className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm md:text-base font-bold font-serif-sc text-stone-100 flex items-center gap-2">
-                <span>思想共鸣罗盘 · 12题三维谱系深度自测</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-normal">
-                  加权评分体系
+              <h2 className="text-sm md:text-base font-bold text-white flex items-center gap-2 uppercase tracking-wider">
+                <span>IDEOLOGY DIAGNOSTIC // 思想自测</span>
+                <span className="text-[10px] px-2 py-0.5 rounded border border-white/15 bg-white/10 text-white font-mono">
+                  3D SPECTRUM
                 </span>
               </h2>
-              <span className="text-[11px] text-stone-400">
+              <span className="text-[11px] text-zinc-400">
                 基于「政治公权 · 经济分配 · 社会文化」三维坐标加权解算，精准映射星图本命星辰
               </span>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded-lg transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             title="关闭测试"
           >
             <X className="w-5 h-5" />
@@ -368,72 +368,69 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
           {/* Step 1: Mode Selection & Intro */}
           {!quizMode && !isCompleted && (
             <div className="space-y-6 py-2">
-              <div className="text-center space-y-2.5">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-sky-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto shadow-lg shadow-amber-500/5">
-                  <Target className="w-8 h-8" />
+              <div className="text-center space-y-2.5 font-mono">
+                <div className="w-14 h-14 rounded-2xl bg-black/60 border border-white/10 flex items-center justify-center text-cyan-400 mx-auto shadow-inner">
+                  <Target className="w-7 h-7" />
                 </div>
-                <h3 className="text-xl md:text-2xl font-bold font-serif-sc text-stone-100">
-                  测测你在人类思想星图中的本命星辰
+                <h3 className="text-xl md:text-2xl font-bold uppercase tracking-wider text-white">
+                  DIAGNOSE YOUR IDEOLOGICAL STAR
                 </h3>
-                <p className="text-xs md:text-sm text-stone-400 max-w-lg mx-auto leading-relaxed">
+                <p className="text-xs text-zinc-400 max-w-lg mx-auto leading-relaxed font-sans">
                   互联网充斥着各种主义的标签与争吵。本测试采用多维加权评分算法，通过直面你在权力边界、劳动分配、电车难题与科技未来等真实困境中的抉择，精准计算你的三维思想坐标，并在星图中点亮与你灵魂共鸣的节点。
                 </p>
               </div>
 
               {/* 3 Dimensions Preview Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
-                <div className="p-3 rounded-xl bg-sky-950/20 border border-sky-800/40 text-left">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 mb-1">
-                    <span>🏛️</span>
-                    <span>政治公权维度 (4题)</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1 font-mono">
+                <div className="p-3.5 bg-black/40 border border-white/10 rounded-xl text-left shadow-sm">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-400 mb-1">
+                    <span>POLITICAL // 政治公权</span>
                   </div>
-                  <p className="text-[11px] text-stone-400 leading-relaxed">
-                    公权力边界、言论与秩序冲突、国家主权与世界公民、社会治理机制
+                  <p className="text-[11px] text-zinc-400 leading-snug font-sans">
+                    公权力边界、言论与秩序冲突、国家主权与治理机制
                   </p>
                 </div>
-                <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-800/40 text-left">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 mb-1">
-                    <span>💰</span>
-                    <span>经济分配维度 (4题)</span>
+                <div className="p-3.5 bg-black/40 border border-white/10 rounded-xl text-left shadow-sm">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 mb-1">
+                    <span>ECONOMIC // 经济分配</span>
                   </div>
-                  <p className="text-[11px] text-stone-400 leading-relaxed">
-                    996劳动异化、财富分配与税收、关键公用基建产权、消费主义欲望
+                  <p className="text-[11px] text-zinc-400 leading-snug font-sans">
+                    劳动异化、财富分配与税收、关键基础设施产权
                   </p>
                 </div>
-                <div className="p-3 rounded-xl bg-purple-950/20 border border-purple-800/40 text-left">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 mb-1">
-                    <span>🌿</span>
-                    <span>社会文化维度 (4题)</span>
+                <div className="p-3.5 bg-black/40 border border-white/10 rounded-xl text-left shadow-sm">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400 mb-1">
+                    <span>CULTURAL // 社会文化</span>
                   </div>
-                  <p className="text-[11px] text-stone-400 leading-relaxed">
-                    家族伦理与历史传统、性别角色认同、电车难题生命伦理、AI奇点狂飙
+                  <p className="text-[11px] text-zinc-400 leading-snug font-sans">
+                    历史传统、多元平权、电车难题伦理与AI奇点狂飙
                   </p>
                 </div>
               </div>
 
               {/* Mode Buttons */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 font-mono">
                 <button
                   type="button"
                   onClick={() => setQuizMode('deep')}
-                  className="p-5 rounded-xl bg-gradient-to-b from-stone-800/90 to-stone-800/40 hover:from-stone-800 hover:to-stone-800/80 border border-amber-500/50 hover:border-amber-400 text-left transition-all group flex flex-col justify-between shadow-lg shadow-amber-500/5 cursor-pointer"
+                  className="p-5 bg-black/40 hover:bg-white/5 border border-white/15 hover:border-white/40 rounded-xl text-left transition-all group flex flex-col justify-between cursor-pointer shadow-sm"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
-                        标准深度诊断 · 12题全覆盖
+                      <span className="text-[10px] px-2 py-0.5 rounded border border-white/15 bg-white/10 text-white font-mono uppercase tracking-widest">
+                        STANDARD // 12 QUESTIONS
                       </span>
-                      <Sparkles className="w-4 h-4 text-amber-400 opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <Sparkles className="w-4 h-4 text-cyan-400" />
                     </div>
-                    <h4 className="text-base font-bold font-serif-sc text-stone-100 group-hover:text-amber-300 transition-colors mb-1.5">
+                    <h4 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">
                       全景三维思想画像 (推荐)
                     </h4>
-                    <p className="text-xs text-stone-400 leading-relaxed">
+                    <p className="text-xs text-zinc-400 leading-relaxed font-sans">
                       完整答完全部 12 道精心设计的哲学困境，生成高精度三维谱系坐标、首要本命星辰、思想三棱镜与对立面宿敌。
                     </p>
                   </div>
-                  <div className="mt-4 text-xs font-semibold text-amber-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    <span>开始 12 题深度诊断</span>
+                  <div className="mt-4 text-xs font-bold text-white flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                    <span>COMMENCE 12-Q DIAGNOSTIC</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </div>
                 </button>
@@ -441,24 +438,24 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setQuizMode('fast')}
-                  className="p-5 rounded-xl bg-stone-800/40 hover:bg-stone-800 border border-stone-700/80 hover:border-sky-400/80 text-left transition-all group flex flex-col justify-between cursor-pointer"
+                  className="p-5 bg-black/40 hover:bg-white/5 border border-white/15 hover:border-white/40 rounded-xl text-left transition-all group flex flex-col justify-between cursor-pointer shadow-sm"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-mono">
-                        极速诊断 · 6题核心矛盾
+                      <span className="text-[10px] px-2 py-0.5 rounded border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 font-mono uppercase tracking-widest">
+                        EXPRESS // 6 QUESTIONS
                       </span>
-                      <Flame className="w-4 h-4 text-sky-400 opacity-60 group-hover:opacity-100 transition-opacity" />
+                      <Flame className="w-4 h-4 text-cyan-400 opacity-70 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <h4 className="text-base font-bold font-serif-sc text-stone-100 group-hover:text-sky-300 transition-colors mb-1.5">
+                    <h4 className="text-sm font-bold text-white mb-1.5 uppercase tracking-wider">
                       核心矛盾快速定位
                     </h4>
-                    <p className="text-xs text-stone-400 leading-relaxed">
+                    <p className="text-xs text-zinc-400 leading-relaxed font-sans">
                       从政治、经济、社会三维度各精选 2 道最尖锐矛盾，2分钟快速初探你的思想光谱。
                     </p>
                   </div>
-                  <div className="mt-4 text-xs font-semibold text-sky-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    <span>开始 6 题速测</span>
+                  <div className="mt-4 text-xs font-bold text-white flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                    <span>COMMENCE 6-Q DIAGNOSTIC</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </div>
                 </button>
@@ -480,9 +477,9 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                       <span>{currentQ.dimensionLabel}</span>
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-stone-400 font-mono text-xs">
+                  <div className="flex items-center gap-2 text-zinc-400 font-mono text-xs">
                     <span>
-                      第 <strong className="text-amber-400">{currentQuestionIndex + 1}</strong> / {activeQuestions.length} 题
+                      第 <strong className="text-white">{currentQuestionIndex + 1}</strong> / {activeQuestions.length} 题
                     </span>
                   </div>
                 </div>
@@ -493,7 +490,7 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                     const isAnswered = selectedAnswers[idx] !== undefined;
                     const isCurrent = currentQuestionIndex === idx;
                     const cat = q.dimensionCategory;
-                    let activeBg = 'bg-sky-400';
+                    let activeBg = 'bg-cyan-400';
                     if (cat === 'economic') activeBg = 'bg-emerald-400';
                     if (cat === 'social') activeBg = 'bg-purple-400';
 
@@ -506,12 +503,12 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                           }
                         }}
                         title={`第 ${idx + 1} 题: ${q.dimensionLabel}`}
-                        className={`h-1.5 flex-1 rounded-full transition-all cursor-pointer ${
+                        className={`h-1.5 flex-1 transition-all cursor-pointer ${
                           isCurrent
-                            ? `${activeBg} ring-2 ring-white/60 scale-y-125`
+                            ? `${activeBg} ring-2 ring-white scale-y-125`
                             : isAnswered
                             ? activeBg
-                            : 'bg-stone-800 hover:bg-stone-700'
+                            : 'bg-neutral-800 hover:bg-neutral-700'
                         }`}
                       />
                     );
@@ -519,25 +516,25 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                 </div>
 
                 {/* Dimension Phase Steps Indicator */}
-                <div className="flex items-center justify-between text-[10px] text-stone-500 pt-0.5 px-0.5">
-                  <span className={currentQ.dimensionCategory === 'political' ? 'text-sky-400 font-semibold' : ''}>
-                    🏛️ 阶段一: 政治秩序
+                <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-0.5 px-0.5 font-mono">
+                  <span className={currentQ.dimensionCategory === 'political' ? 'text-cyan-400 font-bold' : ''}>
+                    POLITICAL // 政治秩序
                   </span>
-                  <span className={currentQ.dimensionCategory === 'economic' ? 'text-emerald-400 font-semibold' : ''}>
-                    💰 阶段二: 经济分配
+                  <span className={currentQ.dimensionCategory === 'economic' ? 'text-emerald-400 font-bold' : ''}>
+                    ECONOMIC // 经济分配
                   </span>
-                  <span className={currentQ.dimensionCategory === 'social' ? 'text-purple-400 font-semibold' : ''}>
-                    🌿 阶段三: 社会文化
+                  <span className={currentQ.dimensionCategory === 'social' ? 'text-purple-400 font-bold' : ''}>
+                    CULTURAL // 社会文化
                   </span>
                 </div>
               </div>
 
               {/* Question Scenario */}
-              <div className="p-4 rounded-xl bg-stone-950/60 border border-stone-800">
-                <span className="text-[10px] uppercase font-mono tracking-wider text-stone-400 block mb-1">
-                  思想实验与现实情境
+              <div className="p-4 bg-black/50 border border-white/10 rounded-xl shadow-inner">
+                <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 block mb-1">
+                  SCENARIO // 思想实验与现实困境
                 </span>
-                <h3 className="text-sm md:text-base font-semibold text-stone-100 font-serif-sc leading-relaxed">
+                <h3 className="text-sm md:text-base font-semibold text-white leading-relaxed">
                   {currentQ.scenario}
                 </h3>
               </div>
@@ -553,24 +550,24 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                       onClick={() => handleSelectOption(idx)}
                       className={`w-full text-left p-3.5 md:p-4 rounded-xl border transition-all text-xs md:text-sm leading-relaxed group flex items-start gap-3 cursor-pointer ${
                         isSelected
-                          ? 'bg-amber-950/30 border-amber-500 text-stone-100 ring-1 ring-amber-500 shadow-md shadow-amber-500/10'
-                          : 'bg-stone-800/40 hover:bg-stone-800 border-stone-700/60 hover:border-amber-400/60 text-stone-200'
+                          ? 'bg-white/10 border-white text-white ring-1 ring-white/50 shadow-md'
+                          : 'bg-black/40 hover:bg-white/5 border-white/10 hover:border-white/30 text-zinc-300'
                       }`}
                     >
                       <span
-                        className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 text-xs font-mono mt-0.5 transition-colors ${
+                        className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 text-xs font-mono mt-0.5 transition-colors ${
                           isSelected
-                            ? 'bg-amber-400 text-stone-950 border-amber-400 font-bold'
-                            : 'border-stone-600 group-hover:border-amber-400 text-stone-400 group-hover:text-amber-400'
+                            ? 'bg-white text-black border-white font-bold'
+                            : 'border-white/20 group-hover:border-white/40 text-zinc-400 group-hover:text-white'
                         }`}
                       >
                         {String.fromCharCode(65 + idx)}
                       </span>
-                      <span className="flex-1 group-hover:text-stone-100">
+                      <span className="flex-1 group-hover:text-white">
                         {option.text}
                       </span>
                       {isSelected && (
-                        <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                       )}
                     </button>
                   );
@@ -578,25 +575,25 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
               </div>
 
               {/* Navigation Bar */}
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-between pt-1 font-mono">
                 <button
                   type="button"
                   onClick={handlePrevQuestion}
                   disabled={currentQuestionIndex === 0}
-                  className="px-3 py-1.5 text-xs text-stone-400 hover:text-stone-200 disabled:opacity-30 disabled:hover:text-stone-400 flex items-center gap-1 rounded hover:bg-stone-800 transition-colors cursor-pointer"
+                  className="px-3.5 py-1.5 text-xs text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:text-zinc-400 flex items-center gap-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>上一题</span>
                 </button>
 
-                <div className="text-[11px] text-stone-400">
+                <div className="text-[11px] text-zinc-500">
                   选择选项后将自动进入下一题
                 </div>
 
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="text-xs text-stone-400 hover:text-stone-300 cursor-pointer"
+                  className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
                 >
                   重新选择模式
                 </button>
@@ -608,33 +605,33 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
           {isCompleted && diagnosis && (
             <div className="space-y-6">
               {/* Soulmate Archetype Banner */}
-              <div className="p-5 md:p-6 rounded-2xl bg-gradient-to-br from-amber-950/40 via-stone-900 to-stone-900 border border-amber-500/40 text-center space-y-2 relative overflow-hidden shadow-xl">
-                <div className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+              <div className="p-5 md:p-6 bg-black/50 border border-white/10 rounded-xl text-center space-y-2 relative overflow-hidden shadow-xl font-mono">
+                <div className="inline-flex items-center gap-1.5 text-xs text-cyan-400 px-3 py-0.5 rounded-full border border-cyan-400/30 bg-cyan-950/40 uppercase tracking-wider">
                   <Award className="w-3.5 h-3.5" />
-                  <span>思想谱系三维解算完成</span>
+                  <span>SPECTRUM RESOLUTION // 解算完成</span>
                 </div>
 
-                <h3 className="text-xl md:text-2xl font-bold font-serif-sc text-stone-100 tracking-wide">
+                <h3 className="text-xl md:text-2xl font-bold uppercase tracking-wider text-white">
                   {diagnosis.archetypeTitle}
                 </h3>
-                <p className="text-xs text-amber-300/80 font-mono">
+                <p className="text-xs text-zinc-400">
                   {diagnosis.archetypeSubtitle}
                 </p>
-                <p className="text-xs text-stone-300 max-w-lg mx-auto leading-relaxed pt-1">
+                <p className="text-xs text-zinc-300 max-w-lg mx-auto leading-relaxed pt-1 font-sans">
                   {diagnosis.archetypeDescription}
                 </p>
               </div>
 
-              {/* 3D Ideological Coordinates HUD (用户三维坐标仪) */}
-              <div className="p-4 rounded-xl bg-stone-950/70 border border-stone-800 space-y-3">
+              {/* 3D Ideological Coordinates HUD */}
+              <div className="p-4 bg-black/40 border border-white/10 rounded-xl space-y-3 font-mono shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Crosshair className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-stone-200">
-                      用户三维思想坐标 (3D Spectrum Coordinates)
+                    <Crosshair className="w-4 h-4 text-cyan-400" />
+                    <span className="text-xs uppercase tracking-wider text-white font-bold">
+                      3D SPECTRUM COORDINATES // 三维思想坐标
                     </span>
                   </div>
-                  <span className="text-[11px] font-mono text-stone-400">
+                  <span className="text-[11px] font-mono text-zinc-400">
                     P: {diagnosis.coordinates.political > 0 ? `+${diagnosis.coordinates.political}` : diagnosis.coordinates.political} | 
                     E: {diagnosis.coordinates.economic > 0 ? `+${diagnosis.coordinates.economic}` : diagnosis.coordinates.economic} | 
                     S: {diagnosis.coordinates.social > 0 ? `+${diagnosis.coordinates.social}` : diagnosis.coordinates.social}
@@ -643,76 +640,76 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                   {/* Political */}
-                  <div className="p-3 rounded-lg bg-sky-950/20 border border-sky-800/40 space-y-1.5">
+                  <div className="p-3.5 rounded-xl bg-sky-950/20 border border-sky-800/30 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-sky-400 font-semibold flex items-center gap-1">
                         <span>🏛️</span>
                         <span>政治公权</span>
                       </span>
-                      <span className="font-mono text-stone-300 font-bold">
+                      <span className="font-mono text-zinc-300 font-bold">
                         {diagnosis.coordinates.political > 0 ? `+${diagnosis.coordinates.political}` : diagnosis.coordinates.political}
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-sky-400 rounded-full transition-all duration-500"
                         style={{ width: `${((diagnosis.coordinates.political + 1) / 2) * 100}%` }}
                       />
                     </div>
-                    <p className="text-[11px] font-medium text-stone-300">
+                    <p className="text-[11px] font-medium text-zinc-300">
                       {diagnosis.dimensionSummaries.political.label}
                     </p>
-                    <p className="text-[10px] text-stone-400 leading-tight">
+                    <p className="text-[10px] text-zinc-400 leading-tight">
                       {diagnosis.dimensionSummaries.political.desc}
                     </p>
                   </div>
 
                   {/* Economic */}
-                  <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-800/40 space-y-1.5">
+                  <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-800/30 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-emerald-400 font-semibold flex items-center gap-1">
                         <span>💰</span>
                         <span>经济分配</span>
                       </span>
-                      <span className="font-mono text-stone-300 font-bold">
+                      <span className="font-mono text-zinc-300 font-bold">
                         {diagnosis.coordinates.economic > 0 ? `+${diagnosis.coordinates.economic}` : diagnosis.coordinates.economic}
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-emerald-400 rounded-full transition-all duration-500"
                         style={{ width: `${((diagnosis.coordinates.economic + 1) / 2) * 100}%` }}
                       />
                     </div>
-                    <p className="text-[11px] font-medium text-stone-300">
+                    <p className="text-[11px] font-medium text-zinc-300">
                       {diagnosis.dimensionSummaries.economic.label}
                     </p>
-                    <p className="text-[10px] text-stone-400 leading-tight">
+                    <p className="text-[10px] text-zinc-400 leading-tight">
                       {diagnosis.dimensionSummaries.economic.desc}
                     </p>
                   </div>
 
                   {/* Social */}
-                  <div className="p-3 rounded-lg bg-purple-950/20 border border-purple-800/40 space-y-1.5">
+                  <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-800/30 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-purple-400 font-semibold flex items-center gap-1">
                         <span>🌿</span>
                         <span>社会文化</span>
                       </span>
-                      <span className="font-mono text-stone-300 font-bold">
+                      <span className="font-mono text-zinc-300 font-bold">
                         {diagnosis.coordinates.social > 0 ? `+${diagnosis.coordinates.social}` : diagnosis.coordinates.social}
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-purple-400 rounded-full transition-all duration-500"
                         style={{ width: `${((diagnosis.coordinates.social + 1) / 2) * 100}%` }}
                       />
                     </div>
-                    <p className="text-[11px] font-medium text-stone-300">
+                    <p className="text-[11px] font-medium text-zinc-300">
                       {diagnosis.dimensionSummaries.social.label}
                     </p>
-                    <p className="text-[10px] text-stone-400 leading-tight">
+                    <p className="text-[10px] text-zinc-400 leading-tight">
                       {diagnosis.dimensionSummaries.social.desc}
                     </p>
                   </div>
@@ -721,18 +718,18 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
 
               {/* Primary Match Card (首要本命星辰) */}
               {diagnosis.topMatches[0] && (
-                <div className="p-4 md:p-5 rounded-xl bg-gradient-to-r from-stone-800/60 to-stone-800/30 border border-amber-500/50 space-y-3 relative shadow-lg">
+                <div className="p-4 md:p-5 bg-black/50 border border-white/10 rounded-xl space-y-3 relative font-mono shadow-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>星图中最精准匹配的本命节点</span>
+                    <span className="text-xs uppercase tracking-wider text-white font-bold flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>PRIMARY ALIGNMENT // 首要本命星辰</span>
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-stone-400 font-mono">
-                        空间欧氏距离: {diagnosis.topMatches[0].distance}
+                      <span className="text-[11px] text-zinc-400">
+                        DIST: {diagnosis.topMatches[0].distance}
                       </span>
-                      <span className="text-xs font-bold text-emerald-400 font-mono px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40">
-                        {diagnosis.topMatches[0].percentage}% 契合度
+                      <span className="text-xs font-bold text-white border border-white/15 px-2.5 py-0.5 rounded-md bg-white/10">
+                        {diagnosis.topMatches[0].percentage}% MATCH
                       </span>
                     </div>
                   </div>
@@ -740,7 +737,7 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start gap-3.5">
                       <span
-                        className="w-5 h-5 rounded-full shadow-lg shrink-0 mt-1"
+                        className="w-4 h-4 rounded-full shadow-lg shrink-0 mt-1"
                         style={{
                           backgroundColor: diagnosis.topMatches[0].node.color,
                           boxShadow: `0 0 16px ${diagnosis.topMatches[0].node.color}`,
@@ -748,17 +745,17 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                       />
                       <div>
                         <div className="flex items-baseline gap-2">
-                          <h4 className="text-lg font-bold font-serif-sc text-stone-100">
+                          <h4 className="text-base font-bold text-white">
                             {diagnosis.topMatches[0].node.name}
                           </h4>
-                          <span className="text-xs text-stone-400 font-sans">
-                            {diagnosis.topMatches[0].node.englishName}
+                          <span className="text-xs text-zinc-400">
+                            [{diagnosis.topMatches[0].node.englishName}]
                           </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-stone-400 border border-stone-700">
-                            {diagnosis.topMatches[0].node.period}
+                          <span className="text-[10px] px-2 py-0.5 rounded border border-white/15 text-zinc-400">
+                            {diagnosis.topMatches[0].node.period.split('（')[0]}
                           </span>
                         </div>
-                        <p className="text-xs text-stone-300 mt-1.5 leading-relaxed">
+                        <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed font-sans">
                           {diagnosis.topMatches[0].node.summary}
                         </p>
                       </div>
@@ -770,19 +767,19 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                         onSelectNode(diagnosis.topMatches[0].node);
                         onClose();
                       }}
-                      className="px-4 py-2 text-xs font-bold text-stone-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-all whitespace-nowrap shrink-0 flex items-center justify-center gap-1.5 shadow-lg shadow-amber-400/20 cursor-pointer hover:scale-105 active:scale-95"
+                      className="px-4 py-2 text-xs uppercase tracking-wider font-bold text-black bg-white hover:bg-zinc-200 rounded-lg transition-all whitespace-nowrap shrink-0 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                     >
                       <Target className="w-3.5 h-3.5" />
-                      <span>在星图中精准定位并高亮</span>
+                      <span>LOCK ON STARFIELD</span>
                     </button>
                   </div>
 
                   {diagnosis.topMatches[0].node.famousQuote && (
-                    <div className="p-2.5 rounded-lg bg-stone-950/80 border border-stone-800 text-xs italic text-stone-300 font-serif-sc flex items-start gap-2">
-                      <Quote className="w-3.5 h-3.5 text-stone-500 shrink-0 mt-0.5" />
+                    <div className="p-3 rounded-lg bg-black/60 border border-white/10 text-xs italic text-zinc-300 font-serif-sc flex items-start gap-2">
+                      <Quote className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
                       <div>
                         <span>“{diagnosis.topMatches[0].node.famousQuote.quote}”</span>
-                        <span className="text-stone-500 not-italic ml-2 font-sans">
+                        <span className="text-zinc-500 not-italic ml-2 font-sans">
                           —— {diagnosis.topMatches[0].node.famousQuote.author}
                         </span>
                       </div>
@@ -791,14 +788,14 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                 </div>
               )}
 
-              {/* Top 3 Resonances List (思想三棱镜契合榜单) */}
+              {/* Top 3 Resonances List */}
               <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
+                <div className="flex items-center justify-between font-mono">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5" />
                     <span>思想三棱镜 · 契合度榜单 (点击在星图查看)</span>
                   </span>
-                  <span className="text-[11px] text-stone-400">
+                  <span className="text-[11px] text-zinc-500">
                     基于空间坐标加权距离排序
                   </span>
                 </div>
@@ -811,35 +808,35 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                         onSelectNode(item.node);
                         onClose();
                       }}
-                      className="p-3.5 rounded-xl bg-stone-800/30 hover:bg-stone-800/80 border border-stone-800 hover:border-amber-400/50 transition-all cursor-pointer group flex flex-col justify-between"
+                      className="p-3.5 bg-black/40 hover:bg-white/5 border border-white/10 hover:border-white/30 rounded-xl transition-all cursor-pointer group flex flex-col justify-between font-mono shadow-sm"
                     >
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-mono text-amber-400 font-semibold">
-                            TOP 0{idx + 1}
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-widest">
+                            RANK 0{idx + 1}
                           </span>
-                          <span className="text-xs font-bold font-mono text-emerald-400">
+                          <span className="text-xs font-bold text-white">
                             {item.percentage}%
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mb-1">
                           <span
-                            className="w-2.5 h-2.5 rounded-full"
+                            className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: item.node.color }}
                           />
-                          <h5 className="font-bold text-sm font-serif-sc text-stone-100 group-hover:text-amber-300 transition-colors">
+                          <h5 className="font-bold text-xs text-white group-hover:text-cyan-300 transition-colors">
                             {item.node.name}
                           </h5>
                         </div>
-                        <p className="text-[11px] text-stone-400 line-clamp-2 leading-relaxed">
+                        <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug font-sans">
                           {item.node.summary}
                         </p>
                       </div>
 
-                      <div className="mt-3 pt-2 border-t border-stone-800/80 flex items-center justify-between text-[10px] text-stone-400">
-                        <span>距离: {item.distance}</span>
-                        <span className="text-amber-400/80 group-hover:text-amber-300 flex items-center gap-0.5">
-                          <span>查看节点</span>
+                      <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-zinc-500">
+                        <span>DIST: {item.distance}</span>
+                        <span className="text-zinc-400 group-hover:text-white flex items-center gap-0.5">
+                          <span>EXPLORE</span>
                           <ArrowRight className="w-2.5 h-2.5" />
                         </span>
                       </div>
@@ -848,15 +845,15 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                 </div>
               </div>
 
-              {/* Ideological Antithesis (潜意识宿敌) */}
+              {/* Ideological Antithesis */}
               {diagnosis.antithesis && (
-                <div className="p-4 rounded-xl bg-red-950/20 border border-red-900/40 space-y-2">
-                  <div className="flex items-center justify-between">
+                <div className="p-4 rounded-xl bg-red-950/20 border border-red-900/30 space-y-2">
+                  <div className="flex items-center justify-between font-mono">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400">
                       <Swords className="w-4 h-4" />
-                      <span>你潜意识中距离最远的思想宿敌</span>
+                      <span>潜意识中距离最远的思想宿敌</span>
                     </div>
-                    <span className="text-xs font-mono text-rose-400/80">
+                    <span className="text-xs text-rose-400/80">
                       契合度仅 {diagnosis.antithesis.percentage}% (空间距离: {diagnosis.antithesis.distance})
                     </span>
                   </div>
@@ -868,14 +865,14 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                           className="w-2.5 h-2.5 rounded-full"
                           style={{ backgroundColor: diagnosis.antithesis.node.color }}
                         />
-                        <span className="font-bold font-serif-sc text-stone-100">
+                        <span className="font-bold text-zinc-100">
                           {diagnosis.antithesis.node.name}
                         </span>
-                        <span className="text-xs text-stone-400">
+                        <span className="text-xs text-zinc-400">
                           ({diagnosis.antithesis.node.englishName})
                         </span>
                       </div>
-                      <p className="text-xs text-stone-300 mt-1 leading-relaxed">
+                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
                         {diagnosis.antithesis.node.summary}
                       </p>
                     </div>
@@ -890,7 +887,7 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
                           );
                           onClose();
                         }}
-                        className="px-3 py-1.5 text-xs text-rose-200 hover:text-white bg-red-900/40 hover:bg-red-800/60 rounded-lg border border-red-800/60 transition-colors whitespace-nowrap shrink-0 flex items-center justify-center gap-1 cursor-pointer"
+                        className="px-3.5 py-1.5 text-xs text-rose-200 hover:text-white bg-red-900/40 hover:bg-red-800/60 rounded-lg border border-red-800/60 transition-colors whitespace-nowrap shrink-0 flex items-center justify-center gap-1 cursor-pointer font-mono"
                       >
                         <Swords className="w-3.5 h-3.5" />
                         <span>开启两极思想辩战</span>
@@ -901,20 +898,20 @@ export const PhilosophyQuizModal: React.FC<PhilosophyQuizModalProps> = ({
               )}
 
               {/* Bottom Actions */}
-              <div className="flex items-center justify-between pt-2 border-t border-stone-800">
+              <div className="flex items-center justify-between pt-2 border-t border-white/10 font-mono">
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="px-4 py-2 text-xs font-medium text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>重新测试 (重测12题)</span>
+                  <span>重新测试</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-xs font-medium text-stone-300 hover:text-white bg-stone-800 hover:bg-stone-700 rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2 text-xs font-medium text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/15 transition-colors cursor-pointer"
                 >
                   关闭报告并漫游星图
                 </button>

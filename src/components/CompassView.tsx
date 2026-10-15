@@ -6,310 +6,223 @@ import {
   ArrowUpRight,
   Layers,
   Sparkles,
-  SlidersHorizontal,
-  Eye,
-  EyeOff,
   Search,
-  Filter,
   ZoomIn,
   Target,
+  Crosshair,
+  Sliders
 } from 'lucide-react';
 
 interface CompassViewProps {
   nodes: IsmNode[];
-  searchQuery?: string;
-  selectedNodeId?: string | null;
+  selectedNodeId: string | null;
+  filterCategory: CategoryType | 'all';
+  searchQuery: string;
   onSelectNode: (node: IsmNode) => void;
 }
 
-type CompassAxisMode = 'classic' | 'cultural' | 'liberty_culture';
+type AxisMode = 'classic' | 'cultural' | 'liberty_culture';
 type ScopeMode = 'core' | 'all';
+type LabelMode = 'smart' | 'all' | 'hover_only';
 type QuadrantFilter = 'all' | 'q1' | 'q2' | 'q3' | 'q4';
 
-interface PlacedNode {
-  node: IsmNode;
-  x: number; // percentage 8% to 92%
-  y: number; // percentage 8% to 92%
-  rawX: number;
-  rawY: number;
-  labelPosition: 'top' | 'bottom' | 'left' | 'right';
-  isCore: boolean;
-}
-
-// Landmark core representative ideologies across ideological quadrants
+// 42 精选最具标杆代表性的流派，在罗盘上作为常驻地标
 const CORE_REPRESENTATIVE_IDS = new Set([
-  // 第一象限：威权左翼 / 国家计划 / 强秩序
-  'marxism',
-  'marxism_leninism',
-  'maoism',
-  'stalinism',
-  'state_socialism',
-  'legalism',
-  // 第二象限：威权右翼 / 传统威权 / 国家资本
-  'fascism',
-  'nazism',
-  'monarchism',
-  'authoritarianism',
-  'clerical_fascism',
-  'mercantilism',
-  'theocracy',
-  'reactionism',
-  // 第三象限：自由左翼 / 民主社会主义 / 存在自决
-  'social_democracy',
-  'democratic_socialism',
-  'nordic_model_socialism',
-  'anarcho_communism',
-  'mutualism',
-  'left_libertarianism',
-  'eco_socialism',
-  'existentialism',
-  'atheistic_existentialism',
-  'christian_existentialism',
-  'third_way_socialism',
-  // 第四象限：自由右翼 / 自由市场 / 极端个人自决
   'classical_liberalism',
+  'neoliberalism',
   'libertarianism',
-  'right_libertarianism',
   'anarcho_capitalism',
-  'minarchism',
-  'paleolibertarianism',
-  'bleeding_heart_libertarianism',
-  'geo_libertarianism',
-  'agorism',
-  // 中心与哲学经典坐标
+  'socialism',
+  'communism',
+  'democratic_socialism',
+  'marxism_leninism',
+  'anarchism',
+  'mutualism',
+  'fascism',
+  'national_socialism',
+  'state_capitalism',
+  'conservatism',
+  'neoconservatism',
+  'traditionalism',
+  'progressivism',
+  'social_democracy',
+  'ordoliberalism',
+  'syndicalism',
+  'collectivism',
+  'individualism',
+  'communitarianism',
+  'technocracy',
+  'transhumanism',
+  'accelerationism',
+  'existentialism',
+  'nihilism',
+  'rationalism',
+  'empiricism',
+  'pragmatism',
+  'postmodernism',
+  'structuralism',
+  'deconstruction',
   'stoicism',
-  'cynicism',
   'epicureanism',
   'utilitarianism',
-  'nihilism',
-  'optimistic_nihilism',
-  'passive_nihilism',
-  'absurdism',
-  'pragmatism',
+  'kantianism',
   'humanism',
-  'transhumanism',
-  'postmodernism',
+  'cosmopolitanism',
+  'nationalism',
+  'ecologism',
 ]);
 
 export const CompassView: React.FC<CompassViewProps> = ({
   nodes,
-  searchQuery = '',
   selectedNodeId,
+  filterCategory,
+  searchQuery,
   onSelectNode,
 }) => {
-  const [hoveredNode, setHoveredNode] = useState<IsmNode | null>(null);
-  const [axisMode, setAxisMode] = useState<CompassAxisMode>('classic');
+  const [axisMode, setAxisMode] = useState<AxisMode>('classic');
   const [scopeMode, setScopeMode] = useState<ScopeMode>('core');
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'all'>('all');
+  const [labelMode, setLabelMode] = useState<LabelMode>('smart');
   const [quadrantFilter, setQuadrantFilter] = useState<QuadrantFilter>('all');
-  const [labelMode, setLabelMode] = useState<'smart' | 'all' | 'hover_only'>('smart');
+  const [hoveredNode, setHoveredNode] = useState<IsmNode | null>(null);
 
-  // Axis configuration based on mode
+  // Compute Axis definition according to axisMode
   const axisConfig = useMemo(() => {
-    if (axisMode === 'classic') {
-      return {
-        title: '经典政治经济罗盘（经济制度 × 政治公权）',
-        desc: '横轴为经济所有制与分配机制，纵轴为公权力集权与个人自由边界。经典政治科学二维谱系。',
-        topLabel: '🏛️ 威权秩序 / 国家集权',
-        bottomLabel: '🕊️ 自由意志 / 个人自治',
-        leftLabel: '🤝 公有共济 / 计划兜底',
-        rightLabel: '📈 自由市场 / 资本私有',
-        q1: '公有制 · 强秩序集权',
-        q2: '国家资本 · 传统秩序',
-        q3: '公有互助 · 自由自治',
-        q4: '自由市场 · 极端自决',
-        getX: (n: IsmNode) => n.spectrum?.economic ?? 0,
-        getY: (n: IsmNode) => -(n.spectrum?.political ?? 0),
-        xName: '经济制度',
-        yName: '政治公权',
-      };
-    } else if (axisMode === 'cultural') {
-      return {
-        title: '社会文化与经济罗盘（经济制度 × 文化观念）',
-        desc: '横轴为经济所有制模式，纵轴为对历史传统习俗的敬畏 vs 对既有陈规与本质的激进解构。',
-        topLabel: '📜 历史传统 / 秩序守成',
-        bottomLabel: '⚡ 激进解构 / 多元进步',
-        leftLabel: '🤝 公有共济 / 劳工福利',
-        rightLabel: '📈 自由市场 / 资本竞争',
-        q1: '传统社群 · 道德纪律',
-        q2: '自由保守 · 传统道德',
-        q3: '左翼进步 · 多元平权',
-        q4: '技术资本 · 后现代前卫',
-        getX: (n: IsmNode) => n.spectrum?.economic ?? 0,
-        getY: (n: IsmNode) => -(n.spectrum?.social ?? 0),
-        xName: '经济制度',
-        yName: '文化观念',
-      };
-    } else {
-      return {
-        title: '自由意志与文化创新罗盘（政治公权 × 文化观念）',
-        desc: '横轴为公权力集中程度，纵轴为文化观念的传统保守度与激进解构度。',
-        topLabel: '📜 历史传统 / 礼法守成',
-        bottomLabel: '⚡ 激进多元 / 存在自决',
-        leftLabel: '🏛️ 威权统治 / 集体意志',
-        rightLabel: '🕊️ 自由意志 / 权利自决',
-        q1: '传统威权 · 封闭秩序',
-        q2: '古典守成 · 自由宪政',
-        q3: '进步集体 · 激进平等',
-        q4: '前卫自决 · 彻底解放',
-        getX: (n: IsmNode) => n.spectrum?.political ?? 0,
-        getY: (n: IsmNode) => -(n.spectrum?.social ?? 0),
-        xName: '政治公权',
-        yName: '文化观念',
-      };
+    switch (axisMode) {
+      case 'cultural':
+        return {
+          title: '文化观念与哲学本体罗盘 // CULTURAL & ONTOLOGICAL RADAR',
+          desc: '横轴：理性客观 vs 感性建构；纵轴：传统保守 vs 激进未来',
+          topLabel: '激进 / 未来主义 (RADICAL)',
+          bottomLabel: '传统 / 秩序保守 (TRADITIONAL)',
+          leftLabel: '理性 / 客观实在 (RATIONAL)',
+          rightLabel: '感性 / 相对建构 (CONSTRUCTED)',
+          q1: '激进理性 (Radical Rationalism)',
+          q2: '激进建构 (Radical Deconstruction)',
+          q3: '传统唯理 (Traditional Realism)',
+          q4: '传统经验 (Traditional Romanticism)',
+          getX: (node: IsmNode) => {
+            const pol = node.spectrum?.political ?? 0;
+            const soc = node.spectrum?.social ?? 0;
+            return Math.max(-1, Math.min(1, pol * 0.4 + (1 - soc) * 0.6));
+          },
+          getY: (node: IsmNode) => {
+            const soc = node.spectrum?.social ?? 0;
+            return Math.max(-1, Math.min(1, soc));
+          },
+        };
+      case 'liberty_culture':
+        return {
+          title: '公权边界与社会开放度罗盘 // AUTHORITY & SOCIAL OPENNESS',
+          desc: '横轴：个体自主 vs 集中统合；纵轴：社会开放 vs 规范约束',
+          topLabel: '高度开放 / 多元包容 (OPEN / PLURAL)',
+          bottomLabel: '强力约束 / 一元统制 (AUTHORITY / UNIFIED)',
+          leftLabel: '个体自主 / 权力消解 (AUTONOMY)',
+          rightLabel: '国家统领 / 集中调控 (STATE CONTROL)',
+          q1: '左翼自主 (Libertarian Left)',
+          q2: '统合威权 (Authoritarian Statism)',
+          q3: '多元公社 (Pluralist Commune)',
+          q4: '秩序统制 (Totalitarian Order)',
+          getX: (node: IsmNode) => -(node.spectrum?.political ?? 0),
+          getY: (node: IsmNode) => node.spectrum?.social ?? 0,
+        };
+      case 'classic':
+      default:
+        return {
+          title: '经典政治经济坐标罗盘 // CLASSICAL POLITICAL COMPASS',
+          desc: '横轴：经济所有制与分配模式（集体公有 ← → 自由私有）；纵轴：社会公权治理（自由民主 ← → 权威集权）',
+          topLabel: '威权 / 集权 (AUTHORITARIAN)',
+          bottomLabel: '自由 / 自治 (LIBERTARIAN)',
+          leftLabel: '经济公有 / 平等分配 (LEFT)',
+          rightLabel: '经济私有 / 自由市场 (RIGHT)',
+          q1: '威权左翼 (Auth-Left)',
+          q2: '威权右翼 (Auth-Right)',
+          q3: '自由意志左翼 (Lib-Left)',
+          q4: '自由意志右翼 (Lib-Right)',
+          getX: (node: IsmNode) => node.spectrum?.economic ?? 0,
+          getY: (node: IsmNode) => node.spectrum?.political ?? 0,
+        };
     }
   }, [axisMode]);
 
-  const queryLower = searchQuery.trim().toLowerCase();
-
-  // Filter nodes by spectrum, scopeMode, category, and quadrant
+  // Filter nodes
   const filteredNodes = useMemo(() => {
-    return nodes.filter((n) => {
-      if (!n.spectrum) return false;
-      if (selectedCategory !== 'all' && n.category !== selectedCategory) return false;
-
-      // If user typed search query, always include matching nodes!
-      const isSearchMatch =
-        queryLower &&
-        (n.name.toLowerCase().includes(queryLower) ||
-          n.englishName.toLowerCase().includes(queryLower) ||
-          n.summary.toLowerCase().includes(queryLower));
-
-      if (queryLower && !isSearchMatch && n.id !== selectedNodeId) {
+    return nodes.filter((node) => {
+      if (filterCategory !== 'all' && node.category !== filterCategory) {
         return false;
       }
-
-      // If in 'core' mode and no active search query, only display representative nodes
-      if (scopeMode === 'core' && !queryLower) {
-        if (!CORE_REPRESENTATIVE_IDS.has(n.id) && n.id !== selectedNodeId) {
+      if (scopeMode === 'core' && !CORE_REPRESENTATIVE_IDS.has(node.id)) {
+        if (selectedNodeId !== node.id) {
           return false;
         }
       }
-
-      // Quadrant filtering
-      const rawX = axisConfig.getX(n);
-      const rawY = axisConfig.getY(n);
-      if (quadrantFilter === 'q1' && !(rawX <= 0.05 && rawY <= 0.05)) return false;
-      if (quadrantFilter === 'q2' && !(rawX >= -0.05 && rawY <= 0.05)) return false;
-      if (quadrantFilter === 'q3' && !(rawX <= 0.05 && rawY >= -0.05)) return false;
-      if (quadrantFilter === 'q4' && !(rawX >= -0.05 && rawY >= -0.05)) return false;
-
       return true;
     });
-  }, [nodes, selectedCategory, scopeMode, queryLower, selectedNodeId, quadrantFilter, axisConfig]);
+  }, [nodes, filterCategory, scopeMode, selectedNodeId]);
 
-  // Anti-Collision Layout Calculation Engine (改进型动态防重叠物理排布)
-  const placedNodes: PlacedNode[] = useMemo(() => {
-    // 1. Initial percentage placement with deterministic hash jitter for overlapping coordinates
-    const points: PlacedNode[] = filteredNodes.map((node, index) => {
-      const rawValX = axisConfig.getX(node);
-      const rawValY = axisConfig.getY(node);
+  const queryLower = searchQuery.trim().toLowerCase();
 
-      // Micro hash jitter to separate perfectly overlapping coordinates (e.g. identical (0,0))
-      const hash = ((node.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) * 17) % 100) / 100;
-      const jitterX = (hash - 0.5) * 1.8;
-      const jitterY = (((hash * 3.7) % 1) - 0.5) * 1.8;
+  // Position calculation & smart collision avoidance for label layout
+  const placedNodes = useMemo(() => {
+    const points: Array<{
+      node: IsmNode;
+      x: number; // percentage 0 - 100
+      y: number; // percentage 0 - 100
+      labelPosition: 'top' | 'bottom';
+      isCore: boolean;
+    }> = [];
 
-      // Map [-1, 1] to percentage range [13%, 87%]
-      const px = ((rawValX + 1) / 2) * 74 + 13 + jitterX;
-      const py = ((rawValY + 1) / 2) * 74 + 13 + jitterY;
+    for (let i = 0; i < filteredNodes.length; i++) {
+      const node = filteredNodes[i];
+      const rawX = axisConfig.getX(node);
+      const rawY = axisConfig.getY(node);
 
-      return {
+      const px = ((rawX + 1) / 2) * 82 + 9;
+      const py = ((-rawY + 1) / 2) * 82 + 9;
+
+      const isCore = CORE_REPRESENTATIVE_IDS.has(node.id);
+      const labelPos = py > 50 ? 'bottom' : 'top';
+
+      points.push({
         node,
-        rawX: rawValX,
-        rawY: rawValY,
         x: px,
         y: py,
-        labelPosition: py > 52 ? 'bottom' : 'top',
-        isCore: CORE_REPRESENTATIVE_IDS.has(node.id),
-      };
-    });
-
-    // 2. Dynamic Minimum Distance based on node count
-    const minDistance = points.length > 80 ? 3.8 : points.length > 40 ? 5.2 : 6.8;
-    const iterations = points.length > 80 ? 25 : 35;
-
-    for (let iter = 0; iter < iterations; iter++) {
-      for (let i = 0; i < points.length; i++) {
-        for (let j = i + 1; j < points.length; j++) {
-          const pA = points[i];
-          const pB = points[j];
-
-          const dx = pB.x - pA.x;
-          const dy = pB.y - pA.y;
-          const dist = Math.hypot(dx, dy);
-
-          if (dist < minDistance && dist > 0.0001) {
-            const overlap = (minDistance - dist) / 2;
-            const nx = dx / dist;
-            const ny = dy / dist;
-
-            // Nudge apart softly
-            pA.x -= nx * overlap * 0.45;
-            pA.y -= ny * overlap * 0.45;
-            pB.x += nx * overlap * 0.45;
-            pB.y += ny * overlap * 0.45;
-
-            // Safety boundary clamping [9%, 91%]
-            pA.x = Math.max(9, Math.min(91, pA.x));
-            pA.y = Math.max(9, Math.min(91, pA.y));
-            pB.x = Math.max(9, Math.min(91, pB.x));
-            pB.y = Math.max(9, Math.min(91, pB.y));
-          }
-        }
-      }
+        labelPosition: labelPos,
+        isCore,
+      });
     }
-
-    // 3. Smart label orientation
-    points.forEach((p, idx) => {
-      const hasPointBelow = points.some(
-        (other, oIdx) => oIdx !== idx && Math.abs(other.x - p.x) < 4.5 && other.y > p.y && other.y - p.y < 7
-      );
-      const hasPointAbove = points.some(
-        (other, oIdx) => oIdx !== idx && Math.abs(other.x - p.x) < 4.5 && other.y < p.y && p.y - other.y < 7
-      );
-
-      if (hasPointBelow && !hasPointAbove) {
-        p.labelPosition = 'top';
-      } else if (hasPointAbove && !hasPointBelow) {
-        p.labelPosition = 'bottom';
-      } else {
-        p.labelPosition = p.y > 52 ? 'bottom' : 'top';
-      }
-    });
 
     return points;
   }, [filteredNodes, axisConfig]);
 
   return (
-    <div className="w-full h-full overflow-y-auto bg-stone-950 px-3 md:px-8 py-5 flex flex-col items-center">
-      {/* 1. Header & Guide */}
-      <div className="text-center max-w-3xl mb-4 space-y-2">
-        <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-sky-400">
-          <Compass className="w-3.5 h-3.5" />
-          <span>意识形态全景二维罗盘 · 清晰防重叠架构</span>
+    <div className="w-full h-full overflow-y-auto bg-black px-3 md:px-8 py-5 flex flex-col items-center font-sans text-white">
+      {/* 1. Header */}
+      <div className="text-center max-w-3xl mb-4 space-y-1.5 font-mono">
+        <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-[0.2em] text-cyan-400">
+          <Crosshair className="w-3.5 h-3.5" />
+          <span>TELEMETRY RADAR // 意识形态全景二维罗盘</span>
         </div>
-        <h2 className="text-xl md:text-2xl font-bold font-serif-sc text-stone-100">
+        <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider text-white">
           {axisConfig.title}
         </h2>
-        <p className="text-stone-400 text-xs md:text-sm leading-relaxed max-w-2xl mx-auto">
+        <p className="text-zinc-400 text-xs leading-relaxed max-w-2xl mx-auto font-sans">
           {axisConfig.desc}
         </p>
       </div>
 
-      {/* 2. Interactive Control Toolbar */}
-      <div className="w-full max-w-5xl flex flex-col gap-2.5 mb-4 bg-stone-900/80 border border-stone-800 p-3 rounded-2xl backdrop-blur-md shadow-lg">
-        {/* Row 1: Axis Mode Switcher & Scope Mode (Core vs All) */}
+      {/* 2. Telemetry Control Toolbar */}
+      <div className="w-full max-w-5xl flex flex-col gap-2.5 mb-4 bg-zinc-950/80 border border-white/10 rounded-xl p-3 font-mono shadow-xl backdrop-blur-xl">
+        {/* Row 1: Mode Switchers */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           {/* Axis Mode */}
-          <div className="flex items-center gap-1 bg-stone-950/80 p-1 rounded-xl border border-stone-800">
+          <div className="flex items-center gap-1 bg-black/60 p-1 border border-white/10 rounded-lg">
             <button
               type="button"
               onClick={() => setAxisMode('classic')}
-              className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all ${
                 axisMode === 'classic'
-                  ? 'bg-sky-500 text-stone-950 font-bold shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
+                  ? 'bg-white text-black font-bold shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               经典政治经济
@@ -317,10 +230,10 @@ export const CompassView: React.FC<CompassViewProps> = ({
             <button
               type="button"
               onClick={() => setAxisMode('cultural')}
-              className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all ${
                 axisMode === 'cultural'
-                  ? 'bg-purple-500 text-stone-950 font-bold shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
+                  ? 'bg-white text-black font-bold shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               文化观念谱系
@@ -328,242 +241,177 @@ export const CompassView: React.FC<CompassViewProps> = ({
             <button
               type="button"
               onClick={() => setAxisMode('liberty_culture')}
-              className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all ${
                 axisMode === 'liberty_culture'
-                  ? 'bg-emerald-500 text-stone-950 font-bold shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
+                  ? 'bg-white text-black font-bold shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               公权与多元
             </button>
           </div>
 
-          {/* Scope Mode (Core Landmarks vs All Isms) */}
-          <div className="flex items-center gap-1 bg-stone-950/80 p-1 rounded-xl border border-stone-800">
+          {/* Scope Mode */}
+          <div className="flex items-center gap-1 bg-black/60 p-1 border border-white/10 rounded-lg">
             <button
               type="button"
               onClick={() => setScopeMode('core')}
-              className={`px-3 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
                 scopeMode === 'core'
-                  ? 'bg-amber-400 text-stone-950 font-bold shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
+                  ? 'bg-white text-black font-bold shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>精简核心标杆 ({CORE_REPRESENTATIVE_IDS.size}派)</span>
+              <span>精简标杆 [{CORE_REPRESENTATIVE_IDS.size}]</span>
             </button>
             <button
               type="button"
               onClick={() => setScopeMode('all')}
-              className={`px-3 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
                 scopeMode === 'all'
-                  ? 'bg-amber-400 text-stone-950 font-bold shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
+                  ? 'bg-white text-black font-bold shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>全谱系呈现 ({nodes.length}派)</span>
+              <span>全谱系 [{nodes.length}]</span>
             </button>
           </div>
 
           {/* Label Display Toggle */}
-          <div className="flex items-center gap-1 bg-stone-950/80 p-1 rounded-xl border border-stone-800 text-xs text-stone-400">
+          <div className="flex items-center gap-1 bg-black/60 p-1 border border-white/10 rounded-lg text-xs text-zinc-400">
             <button
               type="button"
               onClick={() => setLabelMode('smart')}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                labelMode === 'smart' ? 'bg-stone-800 text-stone-100 font-semibold' : 'hover:text-stone-200'
-              }`}
+              className={`px-2.5 py-1 uppercase tracking-wider rounded-md ${labelMode === 'smart' ? 'bg-white text-black font-bold shadow-sm' : 'hover:text-white'}`}
             >
               智能防重叠
             </button>
             <button
               type="button"
               onClick={() => setLabelMode('hover_only')}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                labelMode === 'hover_only' ? 'bg-stone-800 text-stone-100 font-semibold' : 'hover:text-stone-200'
-              }`}
+              className={`px-2.5 py-1 uppercase tracking-wider rounded-md ${labelMode === 'hover_only' ? 'bg-white text-black font-bold shadow-sm' : 'hover:text-white'}`}
             >
               仅悬停显示
             </button>
             <button
               type="button"
               onClick={() => setLabelMode('all')}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                labelMode === 'all' ? 'bg-stone-800 text-stone-100 font-semibold' : 'hover:text-stone-200'
-              }`}
+              className={`px-2.5 py-1 uppercase tracking-wider rounded-md ${labelMode === 'all' ? 'bg-white text-black font-bold shadow-sm' : 'hover:text-white'}`}
             >
               全部常驻
             </button>
           </div>
         </div>
 
-        {/* Row 2: Quadrant Focus Filter & Category Filter */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-800/80">
-          {/* Quadrant Focus Tabs */}
-          <div className="flex items-center gap-1 overflow-x-auto text-xs py-0.5">
-            <span className="text-[11px] text-stone-400 mr-1 flex items-center gap-1">
-              <ZoomIn className="w-3 h-3" /> 聚焦象限:
-            </span>
+        {/* Row 2: Quadrant Focus Filter */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10 text-xs">
+          <div className="flex items-center gap-1 overflow-x-auto">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest mr-1">QUADRANT:</span>
             <button
               type="button"
               onClick={() => setQuadrantFilter('all')}
-              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                quadrantFilter === 'all'
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold'
-                  : 'text-stone-400 hover:bg-stone-800'
-              }`}
+              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'all' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
             >
-              全四象限
+              ALL
             </button>
             <button
               type="button"
               onClick={() => setQuadrantFilter('q1')}
-              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                quadrantFilter === 'q1'
-                  ? 'bg-red-500/20 text-red-300 border border-red-500/40 font-semibold'
-                  : 'text-stone-400 hover:bg-stone-800'
-              }`}
+              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q1' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
             >
-              第一象限 (左上·威权集权)
+              Q1 (威权集权)
             </button>
             <button
               type="button"
               onClick={() => setQuadrantFilter('q2')}
-              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                quadrantFilter === 'q2'
-                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 font-semibold'
-                  : 'text-stone-400 hover:bg-stone-800'
-              }`}
+              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q2' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
             >
-              第二象限 (右上·传统国家资本)
+              Q2 (传统资本)
             </button>
             <button
               type="button"
               onClick={() => setQuadrantFilter('q3')}
-              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                quadrantFilter === 'q3'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold'
-                  : 'text-stone-400 hover:bg-stone-800'
-              }`}
+              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q3' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
             >
-              第三象限 (左下·自由社民/互助)
+              Q3 (自由互助)
             </button>
             <button
               type="button"
               onClick={() => setQuadrantFilter('q4')}
-              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                quadrantFilter === 'q4'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
-                  : 'text-stone-400 hover:bg-stone-800'
-              }`}
+              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q4' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
             >
-              第四象限 (右下·自由市场/个人自决)
+              Q4 (自由市场)
             </button>
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1 overflow-x-auto py-0.5 ml-auto">
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('all')}
-              className={`px-2 py-0.5 text-xs rounded-md transition-colors cursor-pointer whitespace-nowrap ${
-                selectedCategory === 'all'
-                  ? 'bg-stone-100 text-stone-950 font-bold'
-                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-              }`}
-            >
-              全部领域
-            </button>
-            {CATEGORIES.map((cat) => {
-              const count = nodes.filter((n) => n.category === cat.id).length;
-              const isSelected = selectedCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-2 py-0.5 text-xs rounded-md transition-colors cursor-pointer flex items-center gap-1 whitespace-nowrap ${
-                    isSelected
-                      ? 'text-stone-950 font-bold'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-                  }`}
-                  style={isSelected ? { backgroundColor: cat.color } : {}}
-                >
-                  <span>{cat.name.split('与')[0]}</span>
-                  <span className="opacity-70 text-[10px]">({count})</span>
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>
 
-      {/* 3. Spacious 2D Compass Grid Stage */}
-      <div className="relative w-full max-w-5xl aspect-[16/11] min-h-[560px] md:min-h-[620px] bg-stone-900/70 border border-stone-800 rounded-3xl p-6 md:p-8 shadow-2xl overflow-hidden flex items-center justify-center">
-        {/* Subtle Quadrant Background Tints */}
+      {/* 3. Coordinate Radar Board */}
+      <div className="relative w-full max-w-5xl aspect-square md:aspect-[4/3] bg-zinc-950/90 border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center font-mono select-none">
+        {/* Radar Concentric Rings */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+          <div className="w-[85%] h-[85%] rounded-full border border-white/40 border-dashed" />
+          <div className="absolute w-[60%] h-[60%] rounded-full border border-white/30" />
+          <div className="absolute w-[35%] h-[35%] rounded-full border border-white/20 border-dotted" />
+        </div>
+
+        {/* Quadrant Watermark Labels */}
         <div
-          className={`absolute top-0 left-0 w-1/2 h-1/2 border-r border-b border-stone-800/70 p-4 transition-colors ${
-            quadrantFilter === 'q1' || quadrantFilter === 'all' ? 'bg-red-950/15' : 'bg-stone-950/60 opacity-40'
+          className={`absolute top-0 left-0 w-1/2 h-1/2 border-r border-b border-white/10 p-4 transition-colors ${
+            quadrantFilter === 'q1' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
           }`}
         >
-          <span className="text-[11px] font-mono text-stone-400/90 tracking-wider">
-            {axisConfig.q1}
-          </span>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q1}</span>
         </div>
         <div
-          className={`absolute top-0 right-0 w-1/2 h-1/2 border-b border-stone-800/70 p-4 text-right transition-colors ${
-            quadrantFilter === 'q2' || quadrantFilter === 'all' ? 'bg-blue-950/15' : 'bg-stone-950/60 opacity-40'
+          className={`absolute top-0 right-0 w-1/2 h-1/2 border-b border-white/10 p-4 text-right transition-colors ${
+            quadrantFilter === 'q2' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
           }`}
         >
-          <span className="text-[11px] font-mono text-stone-400/90 tracking-wider">
-            {axisConfig.q2}
-          </span>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q2}</span>
         </div>
         <div
-          className={`absolute bottom-0 left-0 w-1/2 h-1/2 border-r border-stone-800/70 p-4 flex items-end transition-colors ${
-            quadrantFilter === 'q3' || quadrantFilter === 'all' ? 'bg-emerald-950/15' : 'bg-stone-950/60 opacity-40'
+          className={`absolute bottom-0 left-0 w-1/2 h-1/2 border-r border-white/10 p-4 flex items-end transition-colors ${
+            quadrantFilter === 'q3' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
           }`}
         >
-          <span className="text-[11px] font-mono text-stone-400/90 tracking-wider">
-            {axisConfig.q3}
-          </span>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q3}</span>
         </div>
         <div
           className={`absolute bottom-0 right-0 w-1/2 h-1/2 p-4 flex items-end justify-end transition-colors ${
-            quadrantFilter === 'q4' || quadrantFilter === 'all' ? 'bg-amber-950/15' : 'bg-stone-950/60 opacity-40'
+            quadrantFilter === 'q4' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
           }`}
         >
-          <span className="text-[11px] font-mono text-stone-400/90 tracking-wider">
-            {axisConfig.q4}
-          </span>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q4}</span>
         </div>
 
         {/* Central Crosshairs Lines */}
-        <div className="absolute inset-x-8 top-1/2 h-[1px] bg-stone-700/50 -translate-y-1/2 pointer-events-none" />
-        <div className="absolute inset-y-8 left-1/2 w-[1px] bg-stone-700/50 -translate-x-1/2 pointer-events-none" />
+        <div className="absolute inset-x-8 top-1/2 h-[1px] bg-white/20 -translate-y-1/2 pointer-events-none" />
+        <div className="absolute inset-y-8 left-1/2 w-[1px] bg-white/20 -translate-x-1/2 pointer-events-none" />
 
-        {/* Outer Perimeter Axis Indicators */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 text-xs font-semibold text-rose-300 bg-stone-950/90 px-3 py-1 rounded-full border border-rose-900/50 shadow-lg pointer-events-none z-20">
+        {/* Axis Perimeter Badges */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
           {axisConfig.topLabel}
         </div>
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs font-semibold text-emerald-300 bg-stone-950/90 px-3 py-1 rounded-full border border-emerald-900/50 shadow-lg pointer-events-none z-20">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
           {axisConfig.bottomLabel}
         </div>
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-sky-300 bg-stone-950/90 px-2.5 py-1 rounded-full border border-sky-900/50 shadow-lg pointer-events-none z-20">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
           {axisConfig.leftLabel}
         </div>
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-amber-300 bg-stone-950/90 px-2.5 py-1 rounded-full border border-amber-900/50 shadow-lg pointer-events-none z-20">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
           {axisConfig.rightLabel}
         </div>
 
-        {/* Compass Center Neutral Zone Indicator */}
-        <div className="absolute w-8 h-8 rounded-full border border-stone-700/40 pointer-events-none flex items-center justify-center">
-          <span className="w-1.5 h-1.5 rounded-full bg-stone-600/60" />
+        {/* Center Reticle */}
+        <div className="absolute w-6 h-6 border border-white/30 rounded-full pointer-events-none flex items-center justify-center">
+          <span className="w-1 h-1 rounded-full bg-white" />
         </div>
 
         {/* Placed Nodes on the Coordinate Plane */}
-        {placedNodes.map(({ node, x, y, rawX, rawY, labelPosition, isCore }) => {
+        {placedNodes.map(({ node, x, y, labelPosition, isCore }) => {
           const isSelected = selectedNodeId === node.id;
           const isHovered = hoveredNode?.id === node.id;
           const isOtherHovered = hoveredNode !== null && !isHovered && !isSelected;
@@ -572,7 +420,6 @@ export const CompassView: React.FC<CompassViewProps> = ({
               node.englishName.toLowerCase().includes(queryLower)
             : false;
 
-          // Determine label visibility
           const shouldShowLabel =
             labelMode === 'all' ||
             isHovered ||
@@ -594,7 +441,7 @@ export const CompassView: React.FC<CompassViewProps> = ({
                   : isMatched
                   ? 'z-35 scale-110'
                   : isOtherHovered
-                  ? 'opacity-30 z-10'
+                  ? 'opacity-25 z-10'
                   : isCore
                   ? 'z-25'
                   : 'z-20'
@@ -605,48 +452,44 @@ export const CompassView: React.FC<CompassViewProps> = ({
               }}
             >
               <div className="relative flex flex-col items-center">
-                {/* Selected Reticle Pulse Ring */}
                 {isSelected && (
-                  <div className="absolute -inset-2.5 rounded-full border-2 border-amber-400 animate-ping opacity-75 pointer-events-none" />
+                  <div className="absolute -inset-2.5 rounded-full border border-white animate-ping opacity-80 pointer-events-none" />
                 )}
 
-                {/* Node Star Circle */}
                 <div
-                  className={`w-3.5 h-3.5 md:w-4 md:h-4 rounded-full border transition-all duration-200 flex items-center justify-center ${
+                  className={`w-3.5 h-3.5 rounded-full border transition-all ${
                     isSelected
-                      ? 'scale-150 ring-4 ring-amber-400 border-white shadow-xl bg-amber-400'
+                      ? 'scale-150 ring-2 ring-white border-white bg-white shadow-xl'
                       : isHovered
-                      ? 'scale-150 ring-4 ring-amber-400/60 border-white shadow-lg'
+                      ? 'scale-150 ring-2 ring-white/60 border-white'
                       : isMatched
-                      ? 'scale-135 ring-3 ring-amber-400/50 border-amber-300'
+                      ? 'scale-135 ring-2 ring-cyan-400'
                       : isCore
-                      ? 'border-white/90 shadow-md ring-1 ring-white/30'
-                      : 'border-white/50 group-hover:scale-125'
+                      ? 'border-white shadow-md'
+                      : 'border-white/40'
                   }`}
                   style={{
                     backgroundColor: node.color,
-                    boxShadow: isSelected || isHovered ? `0 0 16px ${node.color}` : `0 0 6px ${node.color}66`,
                   }}
                 />
 
-                {/* Node Text Label */}
                 {shouldShowLabel && (
                   <div
-                    className={`absolute whitespace-nowrap transition-all duration-150 pointer-events-none ${
-                      labelPosition === 'top' ? '-top-6' : 'top-5'
+                    className={`absolute whitespace-nowrap pointer-events-none ${
+                      labelPosition === 'top' ? '-top-5' : 'top-4'
                     }`}
                   >
                     <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] md:text-[11px] font-serif-sc font-medium transition-all shadow-md flex items-center gap-1 ${
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition-all border shadow-sm ${
                         isSelected
-                          ? 'bg-amber-400 text-stone-950 font-bold border border-amber-300 shadow-amber-400/30'
+                          ? 'bg-white text-black font-bold border-white'
                           : isHovered
-                          ? 'bg-amber-400 text-stone-950 font-bold border border-amber-300 shadow-amber-400/20'
+                          ? 'bg-white text-black font-bold border-white'
                           : isMatched
-                          ? 'bg-amber-500/90 text-stone-950 font-bold border border-amber-300'
+                          ? 'bg-black text-cyan-300 font-bold border-cyan-400'
                           : isCore
-                          ? 'bg-stone-950/90 text-stone-100 border border-stone-700/90 shadow-sm'
-                          : 'bg-stone-950/80 text-stone-300 border border-stone-800/80 group-hover:border-stone-600 group-hover:text-white'
+                          ? 'bg-black/90 text-white border-white/30'
+                          : 'bg-black/90 text-zinc-400 border-white/10 group-hover:text-white'
                       }`}
                     >
                       {node.name}
@@ -658,50 +501,40 @@ export const CompassView: React.FC<CompassViewProps> = ({
           );
         })}
 
-        {/* Floating Detailed Inspection Card when a Node is Hovered */}
+        {/* Floating Detailed Inspection Card */}
         {hoveredNode && (
-          <div className="absolute bottom-6 left-6 right-6 md:right-auto md:w-88 bg-stone-900/95 border border-stone-700 rounded-2xl p-4 shadow-2xl backdrop-blur-md z-50 pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2.5">
+          <div className="absolute bottom-6 left-6 right-6 md:right-auto md:w-80 bg-zinc-950/95 border border-white/15 rounded-xl p-3.5 shadow-2xl backdrop-blur-xl z-50 pointer-events-none font-mono">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2">
                 <span
-                  className="w-3.5 h-3.5 rounded-full shadow-lg"
-                  style={{
-                    backgroundColor: hoveredNode.color,
-                    boxShadow: `0 0 12px ${hoveredNode.color}`,
-                  }}
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: hoveredNode.color }}
                 />
-                <div>
-                  <h4 className="font-bold text-base text-stone-100 font-serif-sc">
-                    {hoveredNode.name}
-                  </h4>
-                  <span className="text-[10px] text-stone-400">
-                    {hoveredNode.englishName} · {hoveredNode.period.split('（')[0]}
-                  </span>
-                </div>
+                <h4 className="font-bold text-xs text-white">
+                  {hoveredNode.name}
+                </h4>
               </div>
 
-              {/* Exact Spectrum Coordinates Badge */}
-              <div className="text-[10px] font-mono text-amber-400 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30">
-                {axisConfig.xName}: {axisConfig.getX(hoveredNode) > 0 ? `+${axisConfig.getX(hoveredNode)}` : axisConfig.getX(hoveredNode)} | 
-                {axisConfig.yName}: {axisConfig.getY(hoveredNode) > 0 ? `+${axisConfig.getY(hoveredNode)}` : axisConfig.getY(hoveredNode)}
+              <div className="text-[10px] text-cyan-400">
+                X: {axisConfig.getX(hoveredNode) > 0 ? `+${axisConfig.getX(hoveredNode)}` : axisConfig.getX(hoveredNode)} | 
+                Y: {axisConfig.getY(hoveredNode) > 0 ? `+${axisConfig.getY(hoveredNode)}` : axisConfig.getY(hoveredNode)}
               </div>
             </div>
 
-            <p className="text-xs text-stone-300 leading-relaxed line-clamp-2">
+            <p className="text-[11px] text-zinc-300 leading-snug line-clamp-2 font-sans mb-2">
               {hoveredNode.summary}
             </p>
 
-            <div className="mt-3 pt-2 border-t border-stone-800 flex items-center justify-between text-[11px] text-amber-400 font-medium">
-              <span>点击直接在右侧查阅完整思想档案</span>
+            <div className="pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] text-zinc-400">
+              <span>CLICK TO LOCK DOSSIER</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
           </div>
         )}
       </div>
 
-      {/* 4. Bottom Clarification */}
-      <div className="max-w-3xl text-center text-[11px] text-stone-400 mt-3 leading-relaxed">
-        提示：默认精选呈现具有里程碑意义的 <strong className="text-stone-300">42 个核心标杆流派</strong>，消除视觉杂乱与重叠碰撞；您可随时点击上方「全谱系呈现」查看全量 310+ 主义，或点击「聚焦象限」深度探索特定意识形态阵营。
+      <div className="max-w-3xl text-center text-[10px] text-zinc-500 mt-3 font-mono uppercase tracking-wider">
+        SYS // DEFAULT 42 CORE REPRESENTATIVE LANDMARKS ACTIVE // RADAR CALIBRATION NOMINAL
       </div>
     </div>
   );

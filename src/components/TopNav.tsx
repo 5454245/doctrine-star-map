@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewMode } from '../types/ism';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Radio, Swords, Compass, Clock, Network } from 'lucide-react';
 
 interface TopNavProps {
   currentView: ViewMode;
@@ -18,66 +18,92 @@ export const TopNav: React.FC<TopNavProps> = ({
   onOpenMusic,
 }) => {
   return (
-    <header className="flex items-center justify-between gap-8 px-6 py-3.5 border-b border-stone-800 bg-stone-950/90 backdrop-blur-md shrink-0 z-30 select-none">
-      {/* Zone 1: Single text element wordmark */}
+    <header className="flex items-center justify-between gap-6 px-6 py-3 border-b border-white/10 bg-black/90 backdrop-blur-xl shrink-0 z-30 select-none text-white font-mono">
+      {/* Zone 1: Minimalist Wordmark */}
       <div className="flex items-center gap-3 shrink-0">
         <a
           href="/"
-          className="text-lg font-bold tracking-tight text-stone-100 font-serif-sc whitespace-nowrap shrink-0 hover:text-amber-400 transition-colors"
+          className="flex items-center gap-2.5 text-white tracking-[0.16em] uppercase hover:opacity-85 transition-opacity"
         >
-          主义星图 · 思想全景图谱
+          <span className="font-extrabold text-sm tracking-[0.24em] text-white">
+            IDEOLOGY
+          </span>
+          <span className="text-zinc-600 font-light">/</span>
+          <span className="text-xs font-medium tracking-wider text-zinc-300">
+            主义星图 · 思想全景图谱
+          </span>
         </a>
       </div>
 
-      {/* Zone 2: 4 clean single-line navigation controls */}
-      <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-stone-400">
+      {/* Zone 2: Navigation Tabs */}
+      <nav className="hidden lg:flex items-center gap-8 text-xs uppercase tracking-[0.18em]">
         <button
           onClick={() => onSelectView('constellation')}
-          className={`hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-            currentView === 'constellation' ? 'text-amber-400 font-semibold' : ''
+          className={`pb-1 transition-all flex items-center gap-1.5 ${
+            currentView === 'constellation'
+              ? 'text-white border-b-2 border-white font-bold'
+              : 'text-zinc-400 hover:text-white'
           }`}
         >
-          意识形态星图
+          <Network className="w-3.5 h-3.5 opacity-70" />
+          <span>CONSTELLATION</span>
+          <span className="text-[10px] text-zinc-500">// 星图</span>
         </button>
+
         <button
           onClick={() => onSelectView('timeline')}
-          className={`hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-            currentView === 'timeline' ? 'text-amber-400 font-semibold' : ''
+          className={`pb-1 transition-all flex items-center gap-1.5 ${
+            currentView === 'timeline'
+              ? 'text-white border-b-2 border-white font-bold'
+              : 'text-zinc-400 hover:text-white'
           }`}
         >
-          历史演化长河
+          <Clock className="w-3.5 h-3.5 opacity-70" />
+          <span>TIMELINE</span>
+          <span className="text-[10px] text-zinc-500">// 长河</span>
         </button>
+
         <button
           onClick={() => onSelectView('compass')}
-          className={`hover:text-stone-100 transition-colors whitespace-nowrap shrink-0 ${
-            currentView === 'compass' ? 'text-amber-400 font-semibold' : ''
+          className={`pb-1 transition-all flex items-center gap-1.5 ${
+            currentView === 'compass'
+              ? 'text-white border-b-2 border-white font-bold'
+              : 'text-zinc-400 hover:text-white'
           }`}
         >
-          哲学价值罗盘
+          <Compass className="w-3.5 h-3.5 opacity-70" />
+          <span>COMPASS</span>
+          <span className="text-[10px] text-zinc-500">// 罗盘</span>
         </button>
+
         <button
           onClick={onOpenCompare}
-          className="hover:text-stone-100 transition-colors whitespace-nowrap shrink-0"
+          className="pb-1 transition-all flex items-center gap-1.5 text-zinc-400 hover:text-white"
         >
-          思想对决矩阵
+          <Swords className="w-3.5 h-3.5 opacity-70" />
+          <span>MATRIX</span>
+          <span className="text-[10px] text-zinc-500">// 对决</span>
         </button>
       </nav>
 
-      {/* Zone 3: Actions */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      {/* Zone 3: Softened Action Controls */}
+      <div className="flex items-center gap-3 shrink-0">
         <button
           onClick={onOpenMusic}
-          className="px-3 py-2 text-xs font-medium text-stone-300 hover:text-white bg-stone-800/80 hover:bg-stone-700/80 rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 border border-stone-700/60"
-          title="生成时代氛围原声 (Lyria)"
+          className="px-3.5 py-1.5 text-[11px] uppercase tracking-wider text-zinc-300 hover:text-white hover:border-white/40 border border-white/15 bg-white/5 hover:bg-white/10 rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+          title="启动时代原声谐波合成器"
         >
-          <span>🎵 时代原声</span>
+          <Radio className="w-3.5 h-3.5 text-cyan-400" />
+          <span>时代原声 // AUDIO</span>
         </button>
+
         <button
           onClick={onOpenQuiz}
-          className="px-4 py-2 text-xs font-medium text-stone-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-md shadow-amber-400/10 font-semibold"
+          className="px-4 py-1.5 text-[11px] uppercase tracking-[0.14em] text-black bg-white hover:bg-zinc-200 font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md"
+          title="意识形态全维自测"
         >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>思想自测罗盘</span>
+          <Sparkles className="w-3.5 h-3.5 text-black" />
+          <span>思想自测 // TEST</span>
         </button>
       </div>
     </header>

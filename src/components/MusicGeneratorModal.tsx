@@ -1,66 +1,212 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { IsmNode } from '../types/ism';
-import { X, Music, Play, Pause, Download, Sparkles, RefreshCw, Volume2, AlertCircle } from 'lucide-react';
+import { audioEngine } from '../utils/audioEngine';
+import { 
+  X, 
+  Play, 
+  Pause, 
+  Download, 
+  Sparkles, 
+  RefreshCw, 
+  Volume2, 
+  Activity, 
+  Radio, 
+  Cpu, 
+  Info 
+} from 'lucide-react';
 
 interface MusicGeneratorModalProps {
   currentIsm: IsmNode | null;
   onClose: () => void;
 }
 
+const SOUND_PROFILES = [
+  {
+    id: 'philosophical',
+    name: '深邃存在主义 // EXISTENTIAL VOID',
+    description: 'D小调次低音长音 (73.4Hz)，空灵九度和声微光，回荡于虚空边界。',
+    tag: '哲学与认识',
+  },
+  {
+    id: 'rational',
+    name: '古典理性秩序 // RATIONAL ORDER',
+    description: '毕达哥拉斯纯五度级联 (C-G-D)，晶莹序列音符，巴赫式严密秩序。',
+    tag: '理性与启蒙',
+  },
+  {
+    id: 'existential',
+    name: '虚无主义深渊 // NIHILISTIC HORIZON',
+    description: '43.6Hz 超低频下潜，失谐锯齿波声谷，冷寂自然风声。',
+    tag: '虚无与解构',
+  },
+  {
+    id: 'cultural',
+    name: '浪漫主义交响 // ROMANTIC GRANDEUR',
+    description: 'F利底亚调式史诗弦乐铺底，宏大和声变幻，时代精神的激昂回响。',
+    tag: '文化与现代性',
+  },
+  {
+    id: 'contemporary',
+    name: '赛博控制论脉冲 // CYBERNETIC PULSE',
+    description: '16分音符模拟合成琶音，立体声相位延迟与高共振扫频滤波。',
+    tag: '当代与数字',
+  },
+  {
+    id: 'ethical',
+    name: '先验价值纯律 // A PRIORI HARMONY',
+    description: 'E多利亚调式双声道共振，黄金分割频率对位，正义与至善的肃穆庄严。',
+    tag: '伦理与公理',
+  },
+];
+
 export const MusicGeneratorModal: React.FC<MusicGeneratorModalProps> = ({
   currentIsm,
   onClose,
 }) => {
-  const [modelType, setModelType] = useState<'lyria-3-clip-preview' | 'lyria-3-pro-preview'>(
-    'lyria-3-clip-preview'
-  );
+  const [activeTab, setActiveTab] = useState<'synth' | 'cloud'>('synth');
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(() => {
+    if (!currentIsm) return 'philosophical';
+    if (currentIsm.category === 'political') return 'rational';
+    if (currentIsm.category === 'cultural') return 'cultural';
+    if (currentIsm.category === 'contemporary') return 'contemporary';
+    if (currentIsm.category === 'ethical') return 'ethical';
+    return 'philosophical';
+  });
 
-  // Generate suggested prompt based on current ism
+  // Synth state
+  const [isLivePlaying, setIsLivePlaying] = useState(false);
+  const [isRenderingWav, setIsRenderingWav] = useState(false);
+  const [renderedWavUrl, setRenderedWavUrl] = useState<string | null>(null);
+
+  // Cloud AI state
   const defaultPrompt = currentIsm
-    ? `A contemplative and profound soundtrack capturing the spirit of ${currentIsm.englishName} (${currentIsm.name}). ${
-        currentIsm.category === 'philosophical'
-          ? 'Deep cello solos, slow resonant piano chords, echoing into silence.'
-          : currentIsm.category === 'cultural'
-          ? 'Passionate 19th-century expressive strings, evocative dynamics, and emotional grandeur.'
-          : currentIsm.category === 'contemporary'
-          ? 'High-tempo futuristic synth arpeggios with pulsing cybernetic basslines.'
-          : 'Solemn brass and chamber orchestra, noble harmonies of constitutional order.'
-      }`
-    : 'A grand cosmic ambient orchestral soundtrack depicting the evolution of human philosophical thought, shimmering strings and deep analog drone.';
-
+    ? `A cinematic contemplative soundtrack capturing the essence of ${currentIsm.englishName} (${currentIsm.name}). Resonant analog drone, atmospheric depth, historical grandeur.`
+    : 'A grand atmospheric orchestral soundtrack depicting the evolution of human philosophical thought, shimmering strings and deep analog drone.';
   const [prompt, setPrompt] = useState(defaultPrompt);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [lyrics, setLyrics] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [cloudModel, setCloudModel] = useState<'lyria-3-clip-preview' | 'lyria-3-pro-preview'>('lyria-3-clip-preview');
+  const [isCloudLoading, setIsCloudLoading] = useState(false);
+  const [cloudStatusMsg, setCloudStatusMsg] = useState<string | null>(null);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Visualizer canvas ref
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
-  // Handle music generation request
-  const handleGenerate = async () => {
-    setIsLoading(true);
-    setErrorMsg(null);
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-      setAudioUrl(null);
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      audioEngine.stopLiveSoundscape();
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (renderedWavUrl) URL.revokeObjectURL(renderedWavUrl);
+    };
+  }, [renderedWavUrl]);
+
+  // Audio Visualizer Loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let visualTime = 0;
+
+    const draw = () => {
+      visualTime += 0.05;
+      const { width, height } = canvas;
+      ctx.fillStyle = '#060608';
+      ctx.fillRect(0, 0, width, height);
+
+      const analyser = audioEngine.getAnalyser();
+
+      if (isLivePlaying && analyser) {
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        analyser.getByteFrequencyData(dataArray);
+
+        const barWidth = (width / bufferLength) * 2.2;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = (dataArray[i] / 255) * (height - 12);
+          ctx.fillStyle = i % 4 === 0 ? '#38bdf8' : '#ffffff';
+          ctx.fillRect(x, height - barHeight, barWidth - 1, barHeight);
+          x += barWidth;
+        }
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        for (let x = 0; x < width; x += 3) {
+          const y = height / 2 + Math.sin(x * 0.03 + visualTime) * 3;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(161, 161, 170, 0.6)';
+        ctx.font = '10px "Plus Jakarta Sans", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('STANDBY // READY FOR TRANSMISSION', width / 2, height / 2 + 16);
+      }
+
+      animFrameRef.current = requestAnimationFrame(draw);
+    };
+
+    animFrameRef.current = requestAnimationFrame(draw);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [isLivePlaying]);
+
+  // Handle live synthesizer toggle
+  const toggleLivePlayback = () => {
+    if (isLivePlaying) {
+      audioEngine.stopLiveSoundscape();
+      setIsLivePlaying(false);
+    } else {
+      audioEngine.startLiveSoundscape(currentIsm, selectedProfileId, () => {
+        setIsLivePlaying(false);
+      });
+      setIsLivePlaying(true);
     }
+  };
+
+  // Handle offline WAV export
+  const handleRenderWav = async () => {
+    setIsRenderingWav(true);
+    try {
+      if (renderedWavUrl) {
+        URL.revokeObjectURL(renderedWavUrl);
+        setRenderedWavUrl(null);
+      }
+      const { url } = await audioEngine.renderOfflineWav(currentIsm, selectedProfileId, 18);
+      setRenderedWavUrl(url);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setIsRenderingWav(false);
+    }
+  };
+
+  // Handle Cloud Lyria generation
+  const handleCloudGenerate = async () => {
+    setIsCloudLoading(true);
+    setCloudStatusMsg(null);
 
     try {
       const response = await fetch('/api/generate-music', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          model: modelType,
-        }),
+        body: JSON.stringify({ prompt, model: cloudModel }),
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || '音乐生成失败');
-      }
 
       if (data.audioBase64) {
         const binary = atob(data.audioBase64);
@@ -70,212 +216,302 @@ export const MusicGeneratorModal: React.FC<MusicGeneratorModalProps> = ({
         }
         const blob = new Blob([bytes], { type: data.mimeType || 'audio/wav' });
         const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
-        setLyrics(data.lyrics || null);
-      } else {
-        throw new Error('未收到有效的音频数据');
+        setRenderedWavUrl(url);
+        setCloudStatusMsg('云端 AI 音频已生成成功！');
+      } else if (data.fallbackToProcedural) {
+        setCloudStatusMsg(data.message || '已自动切换至本地多声部原声合成引擎。');
+        const { url } = await audioEngine.renderOfflineWav(currentIsm, selectedProfileId, 18);
+        setRenderedWavUrl(url);
       }
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || '生成失败，请检查 API Key 配置。');
+      setCloudStatusMsg('云端服务暂时受限，已就绪本地原声引擎。');
+      const { url } = await audioEngine.renderOfflineWav(currentIsm, selectedProfileId, 18);
+      setRenderedWavUrl(url);
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play();
-      setIsPlaying(true);
+      setIsCloudLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="w-full max-w-lg bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-full max-w-xl bg-zinc-950/95 border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-white font-sans">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-stone-800 flex items-center justify-between shrink-0 bg-stone-900/90">
-          <div className="flex items-center gap-2">
-            <Music className="w-5 h-5 text-amber-400" />
+        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-black/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+              <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
+            </div>
             <div>
-              <h2 className="text-base font-bold font-serif-sc text-stone-100">
-                思想时代原声生成 (Lyria 3)
-              </h2>
-              <span className="text-[10px] text-stone-400">
-                由 Google Lyria 驱动 · 聆听意识形态的时代回响
-              </span>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-mono uppercase tracking-[0.2em] text-white font-bold">
+                  AUDIO SYNTH // 思想时代原声
+                </h2>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-white/80 border border-white/15">
+                  REV 3.2
+                </span>
+              </div>
+              <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                NEURAL RESONANCE // MULTI-HARMONIC PHILOSOPHICAL AUDIO
+              </p>
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="p-1.5 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded-lg transition-colors"
+            onClick={() => {
+              audioEngine.stopLiveSoundscape();
+              onClose();
+            }}
+            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-5 text-sm">
-          {/* Current Target Tag */}
-          {currentIsm && (
-            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-stone-800/40 border border-stone-800">
-              <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: currentIsm.color }}
-              />
-              <span className="text-xs text-stone-300 font-serif-sc">
-                当前对准主体：
+        {/* Target Ideology Status Badge */}
+        {currentIsm && (
+          <div className="px-6 py-2.5 bg-zinc-900/60 border-b border-white/10 flex items-center justify-between text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400" />
+              <span className="text-zinc-400">TARGET //</span>
+              <span className="text-white font-bold">{currentIsm.name}</span>
+              <span className="text-zinc-500">[{currentIsm.englishName}]</span>
+            </div>
+            <span className="text-[10px] text-zinc-400 uppercase tracking-widest">
+              ERA // {currentIsm.period.split('（')[0]}
+            </span>
+          </div>
+        )}
+
+        {/* Tab Switcher */}
+        <div className="flex border-b border-white/10 bg-black/40">
+          <button
+            type="button"
+            onClick={() => setActiveTab('synth')}
+            className={`flex-1 py-3 text-xs font-mono uppercase tracking-[0.14em] transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'synth'
+                ? 'text-white border-b-2 border-white bg-white/5 font-bold'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+            <span>多谐波算法合成 (零延迟)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('cloud')}
+            className={`flex-1 py-3 text-xs font-mono uppercase tracking-[0.14em] transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'cloud'
+                ? 'text-white border-b-2 border-white bg-white/5 font-bold'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>云端 AI 引擎 (Google Lyria)</span>
+          </button>
+        </div>
+
+        {/* Oscilloscope Visualizer Screen */}
+        <div className="px-6 pt-5 pb-3">
+          <div className="relative border border-white/10 rounded-xl bg-black/80 p-3 overflow-hidden shadow-inner">
+            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1 px-1">
+              <span>OSCILLOSCOPE // REAL-TIME SPECTRUM</span>
+              <span className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${isLivePlaying ? 'bg-cyan-400 animate-ping' : 'bg-zinc-600'}`} />
+                {isLivePlaying ? 'TRANSMITTING' : 'IDLE'}
               </span>
-              <span className="text-xs font-bold text-stone-100 font-serif-sc">
-                {currentIsm.name} ({currentIsm.englishName})
-              </span>
+            </div>
+            <canvas ref={canvasRef} width={480} height={70} className="w-full h-[70px] block bg-black/90 rounded-lg" />
+          </div>
+        </div>
+
+        {/* Main Body */}
+        <div className="px-6 pb-6 space-y-4 max-h-[50vh] overflow-y-auto">
+          {activeTab === 'synth' ? (
+            <>
+              {/* Profile Selector */}
+              <div>
+                <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 block mb-2">
+                  SELECT HARMONIC PROFILE // 选择思想调式
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {SOUND_PROFILES.map((p) => {
+                    const isSelected = selectedProfileId === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProfileId(p.id);
+                          if (isLivePlaying) {
+                            audioEngine.startLiveSoundscape(currentIsm, p.id, () => {
+                              setIsLivePlaying(false);
+                            });
+                          }
+                        }}
+                        className={`p-3 text-left border rounded-xl transition-all ${
+                          isSelected
+                            ? 'border-white/50 bg-white/10 text-white shadow-md'
+                            : 'border-white/10 bg-black/40 text-zinc-400 hover:border-white/25 hover:text-zinc-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-mono font-bold tracking-wider">{p.name.split('//')[0]}</span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-zinc-300">
+                            {p.tag}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-snug">{p.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons: Live Play + Render WAV */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={toggleLivePlayback}
+                  className={`py-3 px-4 text-xs font-mono tracking-[0.14em] uppercase border rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    isLivePlaying
+                      ? 'border-cyan-400/60 bg-cyan-950/40 text-cyan-200 shadow-md shadow-cyan-950/50'
+                      : 'border-white/20 bg-white/5 hover:border-white hover:bg-white hover:text-black text-white'
+                  }`}
+                >
+                  {isLivePlaying ? (
+                    <>
+                      <Pause className="w-4 h-4 text-cyan-400" />
+                      <span>停止实时回响 // STOP</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 ml-0.5" />
+                      <span>实时声波试听 // LIVE</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRenderWav}
+                  disabled={isRenderingWav}
+                  className="py-3 px-4 text-xs font-mono tracking-[0.14em] uppercase border border-white/20 bg-white/5 hover:border-white hover:bg-white hover:text-black text-white rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                >
+                  {isRenderingWav ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>离线渲染多轨 WAV...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="w-4 h-4" />
+                      <span>渲染并导出 WAV 档案</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Cloud Lyria Options */}
+              <div className="space-y-3">
+                <div className="p-3.5 bg-black/50 border border-white/10 rounded-xl flex items-start gap-2.5 text-xs text-zinc-300 font-mono">
+                  <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <span>
+                    Google Lyria 模型支持利用大模型理解复杂哲学语义并谱写管弦乐章。若 API 权限受限，系统将自动调用内置多频原声引擎无缝兜底。
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 block mb-1.5">
+                    SPECIFICATION // 模型规格
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCloudModel('lyria-3-clip-preview')}
+                      className={`p-2.5 text-left border rounded-lg font-mono text-xs ${
+                        cloudModel === 'lyria-3-clip-preview'
+                          ? 'border-white/50 bg-white/10 text-white font-bold'
+                          : 'border-white/10 text-zinc-400 hover:border-white/25'
+                      }`}
+                    >
+                      30S CLIP PREVIEW
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCloudModel('lyria-3-pro-preview')}
+                      className={`p-2.5 text-left border rounded-lg font-mono text-xs ${
+                        cloudModel === 'lyria-3-pro-preview'
+                          ? 'border-white/50 bg-white/10 text-white font-bold'
+                          : 'border-white/10 text-zinc-400 hover:border-white/25'
+                      }`}
+                    >
+                      FULL PRO SYMPHONY
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 block mb-1.5">
+                    PROMPT // 音乐时代意境描述词
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    className="w-full bg-black/60 border border-white/15 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-white font-mono leading-relaxed"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCloudGenerate}
+                  disabled={isCloudLoading || !prompt.trim()}
+                  className="w-full py-3 text-xs font-mono uppercase tracking-[0.16em] border border-white/30 bg-white/10 hover:bg-white hover:text-black rounded-xl transition-all flex items-center justify-center gap-2 text-white font-bold disabled:opacity-40"
+                >
+                  {isCloudLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>正在请求云端音频渲染...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>触发云端谱写 // COMMENCE AI GENERATION</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Status Message if any */}
+          {cloudStatusMsg && (
+            <div className="p-3 bg-zinc-900/80 border border-white/10 rounded-xl text-xs font-mono text-zinc-300">
+              {cloudStatusMsg}
             </div>
           )}
 
-          {/* Model selection */}
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-stone-400 block mb-2">
-              生成规格与模型
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setModelType('lyria-3-clip-preview')}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  modelType === 'lyria-3-clip-preview'
-                    ? 'bg-amber-950/30 border-amber-500/80 text-amber-200'
-                    : 'bg-stone-800/30 border-stone-700/60 text-stone-400 hover:bg-stone-800/60'
-                }`}
-              >
-                <div className="text-xs font-bold text-stone-100 mb-0.5">
-                  30秒氛围短篇 (Clip)
-                </div>
-                <div className="text-[10px] text-stone-400">
-                  快速生成灵感切片 · lyria-3-clip-preview
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setModelType('lyria-3-pro-preview')}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  modelType === 'lyria-3-pro-preview'
-                    ? 'bg-amber-950/30 border-amber-500/80 text-amber-200'
-                    : 'bg-stone-800/30 border-stone-700/60 text-stone-400 hover:bg-stone-800/60'
-                }`}
-              >
-                <div className="text-xs font-bold text-stone-100 mb-0.5">
-                  完整思想长卷 (Pro)
-                </div>
-                <div className="text-[10px] text-stone-400">
-                  全长宏大交响叙事 · lyria-3-pro-preview
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Prompt input */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                音乐氛围描述词 (Prompt)
-              </label>
-              <button
-                type="button"
-                onClick={() => setPrompt(defaultPrompt)}
-                className="text-[11px] text-amber-400 hover:underline"
-              >
-                还原默认
-              </button>
-            </div>
-            <textarea
-              rows={3}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="w-full bg-stone-950/70 border border-stone-700 rounded-lg p-3 text-xs text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-400 transition-colors leading-relaxed"
-              placeholder="描述乐器、情绪、节奏或场景..."
-            />
-          </div>
-
-          {/* Error notice if any */}
-          {errorMsg && (
-            <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-900/50 flex items-start gap-2 text-xs text-rose-300">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {/* Player when audio ready */}
-          {audioUrl && (
-            <div className="p-4 rounded-xl bg-stone-800/50 border border-stone-700/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-stone-200 text-xs">
-                  <Volume2 className="w-4 h-4 text-emerald-400" />
-                  <span>时代原声音频就绪</span>
+          {/* Audio Player Card when WAV is ready */}
+          {renderedWavUrl && (
+            <div className="p-4 bg-black/60 border border-white/10 rounded-xl space-y-3 font-mono shadow-inner">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-white">
+                  <Volume2 className="w-4 h-4 text-cyan-400" />
+                  <span className="font-bold">TRANSMISSION READY // 音频文件已生成</span>
                 </div>
                 <a
-                  href={audioUrl}
-                  download="philosophy-soundtrack.wav"
-                  className="text-xs text-stone-400 hover:text-white flex items-center gap-1"
+                  href={renderedWavUrl}
+                  download={`${currentIsm?.id || 'philosophy'}-soundtrack.wav`}
+                  className="text-xs text-zinc-300 hover:text-white flex items-center gap-1.5 border border-white/20 rounded-lg px-2.5 py-1 hover:border-white transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>下载 WAV</span>
                 </a>
               </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-amber-400 text-stone-950 flex items-center justify-center hover:bg-amber-300 transition-colors shrink-0 shadow-lg"
-                >
-                  {isPlaying ? (
-                    <Pause className="w-5 h-5" />
-                  ) : (
-                    <Play className="w-5 h-5 ml-0.5" />
-                  )}
-                </button>
-                <div className="flex-1">
-                  <audio
-                    ref={audioRef}
-                    src={audioUrl}
-                    onEnded={() => setIsPlaying(false)}
-                    controls
-                    className="w-full h-8"
-                  />
-                </div>
-              </div>
-
-              {lyrics && (
-                <div className="p-2.5 rounded bg-stone-950/60 border border-stone-800 text-[11px] text-stone-300 italic">
-                  “{lyrics}”
-                </div>
-              )}
+              <audio src={renderedWavUrl} controls className="w-full h-8" />
             </div>
           )}
-
-          {/* Action button */}
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={isLoading || !prompt.trim()}
-            className="w-full py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-stone-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-400/10 cursor-pointer disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Lyria 正在谱写意识形态时代乐章...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>生成时代音乐 ({modelType === 'lyria-3-clip-preview' ? '30s Clip' : 'Full Pro'})</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
     </div>
