@@ -1,6 +1,6 @@
 {
   "name": "主义星图 · 意识形态脉络与思想全景图谱",
-  "description": "全景式思想与意识形态星图谱：用直观的可视化关系网络与通俗易懂的极简解析，厘清互联网纷繁主义的起源、对立、演变与现实投射。",
+  "description": "全景式思想与意识形态星图谱：用直观的可视化关系网络与通俗易懂的极简解析，厘清互联网纷繁主义的起源、对立、演变与现实投射。内容仅供思想史学习交流。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

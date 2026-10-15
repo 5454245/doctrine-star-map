@@ -17,6 +17,7 @@ const ICONIC_ID_COLORS: Record<string, string> = {
   marxism: '#ef4444',
   marxism_leninism: '#b91c1c',
   maoism: '#dc2626',
+  socialism_with_chinese_characteristics: '#dc2626',
   trotskyism: '#f87171',
   democratic_socialism: '#f87171',
   social_democracy: '#fb7185',
