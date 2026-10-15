@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ISMS_DATA, ISM_RELATIONSHIPS } from './data/ismsData';
 import { IsmNode, CategoryType, ViewMode } from './types/ism';
 import { TopNav } from './components/TopNav';
@@ -10,11 +10,27 @@ import { IsmDetailModal } from './components/IsmDetailModal';
 import { IsmComparisonModal } from './components/IsmComparisonModal';
 import { PhilosophyQuizModal } from './components/PhilosophyQuizModal';
 import { MusicGeneratorModal } from './components/MusicGeneratorModal';
+import { audioEngine } from './utils/audioEngine';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('constellation');
   const [filterCategory, setFilterCategory] = useState<CategoryType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Auto-activate cosmic ambient background sound on first user gesture
+  useEffect(() => {
+    const handleFirstGesture = () => {
+      if (!audioEngine.getIsPlaying() && !audioEngine.getMuted()) {
+        audioEngine.playBackgroundMusic();
+      }
+    };
+    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
+    window.addEventListener('keydown', handleFirstGesture, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+    };
+  }, []);
 
   // Selected node for detail drawer
   const [selectedNode, setSelectedNode] = useState<IsmNode | null>(null);
@@ -34,15 +50,9 @@ export default function App() {
     setSelectedNode(node);
     if (node) {
       setFlyToNodeId(node.id);
+      // Keep user in their chosen view (timeline, compass, or constellation)
+      // to allow localized exploration and positioning
     }
-  };
-
-  // Specifically when clicking another ism inside the Detail Modal:
-  // Ensures constellation view is active and smoothly centers the target star in the visible viewport
-  const handleSelectNodeFromDetail = (node: IsmNode) => {
-    setSelectedNode(node);
-    setFlyToNodeId(node.id);
-    setCurrentView('constellation');
   };
 
   // Open comparison modal
@@ -59,7 +69,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--color-void-black)] text-[var(--color-star-white)] font-sans selection:bg-[var(--color-star-white)] selection:text-[var(--color-void-black)]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-black text-white font-sans selection:bg-white selection:text-black">
       {/* 1. Universal Top Navigation Bar (3-Zone Contract) */}
       <TopNav
         currentView={currentView}
@@ -126,7 +136,7 @@ export default function App() {
             allNodes={ISMS_DATA}
             relationships={ISM_RELATIONSHIPS}
             onClose={() => setSelectedNode(null)}
-            onSelectNode={handleSelectNodeFromDetail}
+            onSelectNode={handleSelectNode}
             onOpenCompare={(nodeA) => handleOpenCompare(nodeA)}
             onOpenMusic={(node) => handleOpenMusic(node)}
           />

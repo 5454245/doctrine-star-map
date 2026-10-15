@@ -14,8 +14,14 @@ import { PHILOSOPHY_QUIZ_QUESTIONS, QuizQuestion, QuizOption } from './quizQuest
 
 export { CATEGORIES } from './categories';
 export { ISM_RELATIONSHIPS } from './relationships';
-export { PHILOSOPHY_QUIZ_QUESTIONS } from './quizQuestions';
-export type { QuizQuestion, QuizOption } from './quizQuestions';
+export { 
+  QUIZ_MODES, 
+  ISLAND_5_QUESTIONS, 
+  ROOMMATE_10_QUESTIONS, 
+  NATION_16_QUESTIONS, 
+  getQuizQuestionsByMode 
+} from './quizQuestions';
+export type { QuizQuestion, QuizOption, QuizModeId, QuizModeMeta } from './quizQuestions';
 
 import { getStereotypicalColor } from '../utils/ideologyColors';
 

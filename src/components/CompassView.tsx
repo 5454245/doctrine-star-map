@@ -1,16 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { IsmNode, CategoryType } from '../types/ism';
-import { CATEGORIES } from '../data/ismsData';
 import {
-  Compass,
-  ArrowUpRight,
-  Layers,
   Sparkles,
-  Search,
-  ZoomIn,
-  Target,
+  Layers,
   Crosshair,
-  Sliders
+  ArrowUpRight,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw
 } from 'lucide-react';
 
 interface CompassViewProps {
@@ -85,6 +82,12 @@ export const CompassView: React.FC<CompassViewProps> = ({
   const [quadrantFilter, setQuadrantFilter] = useState<QuadrantFilter>('all');
   const [hoveredNode, setHoveredNode] = useState<IsmNode | null>(null);
 
+  // Interactive Zoom & Pan State on Radar Board
+  const [radarZoom, setRadarZoom] = useState<number>(1.0);
+  const [radarPan, setRadarPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isDraggingBoardRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
   // Compute Axis definition according to axisMode
   const axisConfig = useMemo(() => {
     switch (axisMode) {
@@ -129,7 +132,7 @@ export const CompassView: React.FC<CompassViewProps> = ({
       default:
         return {
           title: '经典政治经济坐标罗盘 // CLASSICAL POLITICAL COMPASS',
-          desc: '横轴：经济所有制与分配模式（集体公有 ← → 自由私有）；纵轴：社会公权治理（自由民主 ← → 权威集权）',
+          desc: '横轴：经济公有 ← → 自由私有；纵轴：自由自治 ← → 权威集权',
           topLabel: '威权 / 集权 (AUTHORITARIAN)',
           bottomLabel: '自由 / 自治 (LIBERTARIAN)',
           leftLabel: '经济公有 / 平等分配 (LEFT)',
@@ -143,6 +146,74 @@ export const CompassView: React.FC<CompassViewProps> = ({
         };
     }
   }, [axisMode]);
+
+  // Handle quadrant focus & auto-zoom
+  const handleSelectQuadrant = (q: QuadrantFilter) => {
+    setQuadrantFilter(q);
+    if (q === 'all') {
+      setRadarZoom(1.0);
+      setRadarPan({ x: 0, y: 0 });
+    } else if (q === 'q1') {
+      // Top-Left quadrant
+      setRadarZoom(1.75);
+      setRadarPan({ x: 22, y: 22 });
+    } else if (q === 'q2') {
+      // Top-Right quadrant
+      setRadarZoom(1.75);
+      setRadarPan({ x: -22, y: 22 });
+    } else if (q === 'q3') {
+      // Bottom-Left quadrant
+      setRadarZoom(1.75);
+      setRadarPan({ x: 22, y: -22 });
+    } else if (q === 'q4') {
+      // Bottom-Right quadrant
+      setRadarZoom(1.75);
+      setRadarPan({ x: -22, y: -22 });
+    }
+  };
+
+  // Zoom handlers
+  const handleZoom = (type: 'in' | 'out') => {
+    setRadarZoom((prev) => {
+      const next = type === 'in' ? prev * 1.25 : prev / 1.25;
+      return Math.max(0.7, Math.min(3.0, next));
+    });
+  };
+
+  const handleResetRadar = () => {
+    setRadarZoom(1.0);
+    setRadarPan({ x: 0, y: 0 });
+    setQuadrantFilter('all');
+  };
+
+  // Wheel zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    setRadarZoom((prev) => Math.max(0.7, Math.min(3.0, prev * factor)));
+  };
+
+  // Dragging / Panning radar board
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.node-point-element')) return;
+    isDraggingBoardRef.current = true;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingBoardRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    setRadarPan((prev) => ({
+      x: prev.x + (dx / 500) * 100,
+      y: prev.y + (dy / 500) * 100,
+    }));
+  };
+
+  const handleMouseUp = () => {
+    isDraggingBoardRef.current = false;
+  };
 
   // Filter nodes
   const filteredNodes = useMemo(() => {
@@ -161,14 +232,14 @@ export const CompassView: React.FC<CompassViewProps> = ({
 
   const queryLower = searchQuery.trim().toLowerCase();
 
-  // Position calculation & smart collision avoidance for label layout
+  // Position calculation & boundary protection
   const placedNodes = useMemo(() => {
     const points: Array<{
       node: IsmNode;
       x: number; // percentage 0 - 100
       y: number; // percentage 0 - 100
-      labelPosition: 'top' | 'bottom';
       isCore: boolean;
+      quadrant: 'q1' | 'q2' | 'q3' | 'q4';
     }> = [];
 
     for (let i = 0; i < filteredNodes.length; i++) {
@@ -176,50 +247,62 @@ export const CompassView: React.FC<CompassViewProps> = ({
       const rawX = axisConfig.getX(node);
       const rawY = axisConfig.getY(node);
 
+      // Determine quadrant
+      let q: 'q1' | 'q2' | 'q3' | 'q4' = 'q1';
+      if (rawX <= 0 && rawY >= 0) q = 'q1';
+      else if (rawX >= 0 && rawY >= 0) q = 'q2';
+      else if (rawX <= 0 && rawY <= 0) q = 'q3';
+      else q = 'q4';
+
+      // Base percentage 9% ~ 91%
       const px = ((rawX + 1) / 2) * 82 + 9;
       const py = ((-rawY + 1) / 2) * 82 + 9;
 
       const isCore = CORE_REPRESENTATIVE_IDS.has(node.id);
-      const labelPos = py > 50 ? 'bottom' : 'top';
 
       points.push({
         node,
         x: px,
         y: py,
-        labelPosition: labelPos,
         isCore,
+        quadrant: q,
       });
     }
 
     return points;
   }, [filteredNodes, axisConfig]);
 
-  return (
-    <div className="w-full h-full overflow-y-auto bg-black px-3 md:px-8 py-5 flex flex-col items-center font-sans text-white">
-      {/* 1. Header */}
-      <div className="text-center max-w-3xl mb-4 space-y-1.5 font-mono">
-        <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-[0.2em] text-cyan-400">
-          <Crosshair className="w-3.5 h-3.5" />
-          <span>TELEMETRY RADAR // 意识形态全景二维罗盘</span>
-        </div>
-        <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider text-white">
-          {axisConfig.title}
-        </h2>
-        <p className="text-zinc-400 text-xs leading-relaxed max-w-2xl mx-auto font-sans">
-          {axisConfig.desc}
-        </p>
-      </div>
+  const isDrawerOpen = !!selectedNodeId;
 
-      {/* 2. Telemetry Control Toolbar */}
-      <div className="w-full max-w-5xl flex flex-col gap-2.5 mb-4 bg-zinc-950/80 border border-white/10 rounded-xl p-3 font-mono shadow-xl backdrop-blur-xl">
-        {/* Row 1: Mode Switchers */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+  return (
+    <div
+      className={`w-full h-full overflow-y-auto overflow-x-hidden bg-black px-2 md:px-6 py-2 flex flex-col items-center justify-between font-sans text-white select-none transition-all ${
+        isDrawerOpen ? '2xl:pr-[500px]' : ''
+      }`}
+    >
+      {/* 1. Header & Controls Integrated Telemetry Bar (Compact Height) */}
+      <div className="w-full max-w-4xl flex flex-col gap-1.5 shrink-0 font-mono">
+        {/* Title Bar */}
+        <div className="flex items-center justify-between gap-2 px-1">
+          <div className="flex items-center gap-2">
+            <Crosshair className="w-4 h-4 text-cyan-400 shrink-0" />
+            <h2 className="text-xs md:text-sm font-bold uppercase tracking-wider text-white">
+              {axisConfig.title}
+            </h2>
+          </div>
+          <span className="text-[10px] text-zinc-400 hidden sm:inline">
+            {axisConfig.desc}
+          </span>
+        </div>
+
+        {/* Toolbar Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5 bg-zinc-950/80 border border-white/10 rounded-xl p-1.5 shadow-lg backdrop-blur-xl">
           {/* Axis Mode */}
-          <div className="flex items-center gap-1 bg-black/60 p-1 border border-white/10 rounded-lg">
+          <div className="flex items-center gap-1 bg-black/60 p-0.5 border border-white/10 rounded-lg">
             <button
               type="button"
               onClick={() => setAxisMode('classic')}
-              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all ${
+              className={`px-2 py-0.5 text-[11px] uppercase tracking-wider rounded-md transition-all ${
                 axisMode === 'classic'
                   ? 'bg-white text-black font-bold shadow-sm'
                   : 'text-zinc-400 hover:text-white'
@@ -230,7 +313,7 @@ export const CompassView: React.FC<CompassViewProps> = ({
             <button
               type="button"
               onClick={() => setAxisMode('cultural')}
-              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all ${
+              className={`px-2 py-0.5 text-[11px] uppercase tracking-wider rounded-md transition-all ${
                 axisMode === 'cultural'
                   ? 'bg-white text-black font-bold shadow-sm'
                   : 'text-zinc-400 hover:text-white'
@@ -241,7 +324,7 @@ export const CompassView: React.FC<CompassViewProps> = ({
             <button
               type="button"
               onClick={() => setAxisMode('liberty_culture')}
-              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all ${
+              className={`px-2 py-0.5 text-[11px] uppercase tracking-wider rounded-md transition-all ${
                 axisMode === 'liberty_culture'
                   ? 'bg-white text-black font-bold shadow-sm'
                   : 'text-zinc-400 hover:text-white'
@@ -251,290 +334,390 @@ export const CompassView: React.FC<CompassViewProps> = ({
             </button>
           </div>
 
-          {/* Scope Mode */}
-          <div className="flex items-center gap-1 bg-black/60 p-1 border border-white/10 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setScopeMode('core')}
-              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
-                scopeMode === 'core'
-                  ? 'bg-white text-black font-bold shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>精简标杆 [{CORE_REPRESENTATIVE_IDS.size}]</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setScopeMode('all')}
-              className={`px-3 py-1 text-xs uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${
-                scopeMode === 'all'
-                  ? 'bg-white text-black font-bold shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>全谱系 [{nodes.length}]</span>
-            </button>
+          {/* Scope Mode & Label Mode */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 bg-black/60 p-0.5 border border-white/10 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setScopeMode('core')}
+                className={`px-2 py-0.5 text-[11px] uppercase tracking-wider rounded-md transition-all flex items-center gap-1 ${
+                  scopeMode === 'core'
+                    ? 'bg-white text-black font-bold shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>精简标杆 [{CORE_REPRESENTATIVE_IDS.size}]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeMode('all')}
+                className={`px-2 py-0.5 text-[11px] uppercase tracking-wider rounded-md transition-all flex items-center gap-1 ${
+                  scopeMode === 'all'
+                    ? 'bg-white text-black font-bold shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Layers className="w-3 h-3" />
+                <span>全谱系 [{nodes.length}]</span>
+              </button>
+            </div>
+
+            <div className="hidden md:flex items-center gap-1 bg-black/60 p-0.5 border border-white/10 rounded-lg text-[11px] text-zinc-400">
+              <button
+                type="button"
+                onClick={() => setLabelMode('smart')}
+                className={`px-1.5 py-0.5 rounded-md ${
+                  labelMode === 'smart' ? 'bg-white text-black font-bold' : 'hover:text-white'
+                }`}
+              >
+                智能标签
+              </button>
+              <button
+                type="button"
+                onClick={() => setLabelMode('all')}
+                className={`px-1.5 py-0.5 rounded-md ${
+                  labelMode === 'all' ? 'bg-white text-black font-bold' : 'hover:text-white'
+                }`}
+              >
+                常驻全显
+              </button>
+              <button
+                type="button"
+                onClick={() => setLabelMode('hover_only')}
+                className={`px-1.5 py-0.5 rounded-md ${
+                  labelMode === 'hover_only' ? 'bg-white text-black font-bold' : 'hover:text-white'
+                }`}
+              >
+                仅悬停
+              </button>
+            </div>
           </div>
 
-          {/* Label Display Toggle */}
-          <div className="flex items-center gap-1 bg-black/60 p-1 border border-white/10 rounded-lg text-xs text-zinc-400">
+          {/* Quadrant Focus Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto text-[11px]">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest mr-0.5">象限:</span>
             <button
               type="button"
-              onClick={() => setLabelMode('smart')}
-              className={`px-2.5 py-1 uppercase tracking-wider rounded-md ${labelMode === 'smart' ? 'bg-white text-black font-bold shadow-sm' : 'hover:text-white'}`}
+              onClick={() => handleSelectQuadrant('all')}
+              className={`px-1.5 py-0.5 rounded border transition-all ${
+                quadrantFilter === 'all'
+                  ? 'border-white bg-white text-black font-bold shadow-sm'
+                  : 'border-white/10 text-zinc-400 hover:text-white'
+              }`}
             >
-              智能防重叠
+              全景
             </button>
             <button
               type="button"
-              onClick={() => setLabelMode('hover_only')}
-              className={`px-2.5 py-1 uppercase tracking-wider rounded-md ${labelMode === 'hover_only' ? 'bg-white text-black font-bold shadow-sm' : 'hover:text-white'}`}
+              onClick={() => handleSelectQuadrant('q1')}
+              className={`px-1.5 py-0.5 rounded border transition-all ${
+                quadrantFilter === 'q1'
+                  ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200 font-bold shadow-sm'
+                  : 'border-white/10 text-zinc-400 hover:text-white'
+              }`}
             >
-              仅悬停显示
+              Q1
             </button>
             <button
               type="button"
-              onClick={() => setLabelMode('all')}
-              className={`px-2.5 py-1 uppercase tracking-wider rounded-md ${labelMode === 'all' ? 'bg-white text-black font-bold shadow-sm' : 'hover:text-white'}`}
+              onClick={() => handleSelectQuadrant('q2')}
+              className={`px-1.5 py-0.5 rounded border transition-all ${
+                quadrantFilter === 'q2'
+                  ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200 font-bold shadow-sm'
+                  : 'border-white/10 text-zinc-400 hover:text-white'
+              }`}
             >
-              全部常驻
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Quadrant Focus Filter */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10 text-xs">
-          <div className="flex items-center gap-1 overflow-x-auto">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-widest mr-1">QUADRANT:</span>
-            <button
-              type="button"
-              onClick={() => setQuadrantFilter('all')}
-              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'all' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
-            >
-              ALL
+              Q2
             </button>
             <button
               type="button"
-              onClick={() => setQuadrantFilter('q1')}
-              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q1' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
+              onClick={() => handleSelectQuadrant('q3')}
+              className={`px-1.5 py-0.5 rounded border transition-all ${
+                quadrantFilter === 'q3'
+                  ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200 font-bold shadow-sm'
+                  : 'border-white/10 text-zinc-400 hover:text-white'
+              }`}
             >
-              Q1 (威权集权)
+              Q3
             </button>
             <button
               type="button"
-              onClick={() => setQuadrantFilter('q2')}
-              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q2' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
+              onClick={() => handleSelectQuadrant('q4')}
+              className={`px-1.5 py-0.5 rounded border transition-all ${
+                quadrantFilter === 'q4'
+                  ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200 font-bold shadow-sm'
+                  : 'border-white/10 text-zinc-400 hover:text-white'
+              }`}
             >
-              Q2 (传统资本)
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuadrantFilter('q3')}
-              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q3' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
-            >
-              Q3 (自由互助)
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuadrantFilter('q4')}
-              className={`px-2.5 py-1 rounded-md border ${quadrantFilter === 'q4' ? 'border-white bg-white text-black font-bold shadow-sm' : 'border-white/10 text-zinc-400 hover:text-white'}`}
-            >
-              Q4 (自由市场)
+              Q4
             </button>
           </div>
         </div>
       </div>
 
-      {/* 3. Coordinate Radar Board */}
-      <div className="relative w-full max-w-5xl aspect-square md:aspect-[4/3] bg-zinc-950/90 border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center font-mono select-none">
-        {/* Radar Concentric Rings */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-          <div className="w-[85%] h-[85%] rounded-full border border-white/40 border-dashed" />
-          <div className="absolute w-[60%] h-[60%] rounded-full border border-white/30" />
-          <div className="absolute w-[35%] h-[35%] rounded-full border border-white/20 border-dotted" />
+      {/* 2. Responsive Coordinate Radar Board (Guaranteed 100% Screen Fit) */}
+      <div
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onWheel={handleWheel}
+        className="relative w-full max-w-4xl flex-1 min-h-[300px] max-h-[calc(100vh-185px)] bg-zinc-950/90 border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center font-mono my-1 select-none cursor-grab active:cursor-grabbing shrink-0"
+      >
+        {/* Transform Container with Zoom & Pan */}
+        <div
+          className="relative w-full h-full transition-transform duration-300 ease-out"
+          style={{
+            transform: `translate(${radarPan.x}%, ${radarPan.y}%) scale(${radarZoom})`,
+            transformOrigin: 'center center',
+          }}
+        >
+          {/* Radar Concentric Rings */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+            <div className="w-[85%] h-[85%] rounded-full border border-white/40 border-dashed" />
+            <div className="absolute w-[60%] h-[60%] rounded-full border border-white/30" />
+            <div className="absolute w-[35%] h-[35%] rounded-full border border-white/20 border-dotted" />
+          </div>
+
+          {/* Quadrant Watermark Labels */}
+          <div
+            className={`absolute top-0 left-0 w-1/2 h-1/2 border-r border-b border-white/10 p-3.5 transition-colors ${
+              quadrantFilter === 'q1' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-15'
+            }`}
+          >
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q1}</span>
+          </div>
+          <div
+            className={`absolute top-0 right-0 w-1/2 h-1/2 border-b border-white/10 p-3.5 text-right transition-colors ${
+              quadrantFilter === 'q2' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-15'
+            }`}
+          >
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q2}</span>
+          </div>
+          <div
+            className={`absolute bottom-0 left-0 w-1/2 h-1/2 border-r border-white/10 p-3.5 flex items-end transition-colors ${
+              quadrantFilter === 'q3' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-15'
+            }`}
+          >
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q3}</span>
+          </div>
+          <div
+            className={`absolute bottom-0 right-0 w-1/2 h-1/2 p-3.5 flex items-end justify-end transition-colors ${
+              quadrantFilter === 'q4' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-15'
+            }`}
+          >
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q4}</span>
+          </div>
+
+          {/* Central Crosshair Axes */}
+          <div className="absolute inset-x-6 top-1/2 h-[1px] bg-white/25 -translate-y-1/2 pointer-events-none" />
+          <div className="absolute inset-y-6 left-1/2 w-[1px] bg-white/25 -translate-x-1/2 pointer-events-none" />
+
+          {/* Center Origin Reticle */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 border border-white/30 rounded-full pointer-events-none flex items-center justify-center">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+          </div>
+
+          {/* Placed Nodes on the Coordinate Plane */}
+          {placedNodes.map(({ node, x, y, isCore, quadrant }) => {
+            const isSelected = selectedNodeId === node.id;
+            const isHovered = hoveredNode?.id === node.id;
+            const isOtherHovered = hoveredNode !== null && !isHovered && !isSelected;
+            const isMatched = queryLower
+              ? node.name.toLowerCase().includes(queryLower) ||
+                node.englishName.toLowerCase().includes(queryLower)
+              : false;
+
+            // Quadrant filter visibility
+            const isDimmedByQuadrant = quadrantFilter !== 'all' && quadrantFilter !== quadrant;
+
+            const shouldShowLabel =
+              !isDimmedByQuadrant &&
+              (labelMode === 'all' ||
+                isHovered ||
+                isSelected ||
+                isMatched ||
+                (labelMode === 'smart' && isCore));
+
+            // Smart anchor calculation to keep labels within bounds
+            let alignClass = '-translate-x-1/2';
+            if (x < 18) alignClass = 'translate-x-2 text-left';
+            else if (x > 82) alignClass = '-translate-x-[calc(100%+8px)] text-right';
+
+            let vAlignClass = '-top-5';
+            if (y < 16) vAlignClass = 'top-4';
+            else if (y > 84) vAlignClass = '-top-5';
+
+            return (
+              <div
+                key={node.id}
+                onClick={() => onSelectNode(node)}
+                onMouseEnter={() => setHoveredNode(node)}
+                onMouseLeave={() => setHoveredNode(null)}
+                className={`node-point-element absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-200 group ${
+                  isSelected
+                    ? 'z-50 scale-125'
+                    : isHovered
+                    ? 'z-40 scale-115'
+                    : isMatched
+                    ? 'z-35 scale-110'
+                    : isDimmedByQuadrant
+                    ? 'opacity-20 pointer-events-none'
+                    : isOtherHovered
+                    ? 'opacity-25 z-10'
+                    : isCore
+                    ? 'z-25'
+                    : 'z-20'
+                }`}
+                style={{
+                  left: `${x}%`,
+                  top: `${y}%`,
+                }}
+              >
+                <div className="relative flex flex-col items-center">
+                  {isSelected && (
+                    <div
+                      className="absolute -inset-2.5 rounded-full border animate-ping opacity-85 pointer-events-none"
+                      style={{ borderColor: node.color }}
+                    />
+                  )}
+
+                  {/* Node Dot in Authentic Chromatic Accent Color */}
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full border transition-all ${
+                      isSelected
+                        ? 'scale-150 ring-2 ring-white/90 shadow-xl'
+                        : isHovered
+                        ? 'scale-140 ring-2 ring-white/50'
+                        : isMatched
+                        ? 'scale-130 ring-2 ring-cyan-400'
+                        : isCore
+                        ? 'shadow-md ring-1 ring-white/20'
+                        : 'border-white/30'
+                    }`}
+                    style={{
+                      backgroundColor: node.color,
+                      borderColor: isSelected ? '#ffffff' : node.color,
+                      boxShadow: isSelected || isHovered ? `0 0 14px ${node.color}` : 'none',
+                    }}
+                  />
+
+                  {/* Node Text Label with Collision-Safe Alignment */}
+                  {shouldShowLabel && (
+                    <div
+                      className={`absolute whitespace-nowrap pointer-events-none ${vAlignClass} ${alignClass}`}
+                    >
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition-all border shadow-sm ${
+                          isSelected
+                            ? 'bg-zinc-950 text-white font-bold border-cyan-400 ring-1 ring-cyan-400'
+                            : isHovered
+                            ? 'bg-zinc-950 text-white font-bold border-white'
+                            : isMatched
+                            ? 'bg-black text-cyan-300 font-bold border-cyan-400'
+                            : isCore
+                            ? 'bg-black/90 text-white border-white/30'
+                            : 'bg-black/90 text-zinc-400 border-white/10 group-hover:text-white'
+                        }`}
+                        style={{
+                          borderColor: isSelected || isHovered ? node.color : undefined,
+                        }}
+                      >
+                        {node.name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Quadrant Watermark Labels */}
-        <div
-          className={`absolute top-0 left-0 w-1/2 h-1/2 border-r border-b border-white/10 p-4 transition-colors ${
-            quadrantFilter === 'q1' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
-          }`}
-        >
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q1}</span>
-        </div>
-        <div
-          className={`absolute top-0 right-0 w-1/2 h-1/2 border-b border-white/10 p-4 text-right transition-colors ${
-            quadrantFilter === 'q2' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
-          }`}
-        >
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q2}</span>
-        </div>
-        <div
-          className={`absolute bottom-0 left-0 w-1/2 h-1/2 border-r border-white/10 p-4 flex items-end transition-colors ${
-            quadrantFilter === 'q3' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
-          }`}
-        >
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q3}</span>
-        </div>
-        <div
-          className={`absolute bottom-0 right-0 w-1/2 h-1/2 p-4 flex items-end justify-end transition-colors ${
-            quadrantFilter === 'q4' || quadrantFilter === 'all' ? 'bg-white/[0.02]' : 'opacity-20'
-          }`}
-        >
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">{axisConfig.q4}</span>
-        </div>
-
-        {/* Central Crosshairs Lines */}
-        <div className="absolute inset-x-8 top-1/2 h-[1px] bg-white/20 -translate-y-1/2 pointer-events-none" />
-        <div className="absolute inset-y-8 left-1/2 w-[1px] bg-white/20 -translate-x-1/2 pointer-events-none" />
-
-        {/* Axis Perimeter Badges */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
+        {/* Fixed Perimeter Axis Badges (Stationary on Board Frame) */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-white bg-black/85 px-3 py-0.5 rounded-md border border-white/20 pointer-events-none z-30 shadow-md">
           {axisConfig.topLabel}
         </div>
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-white bg-black/85 px-3 py-0.5 rounded-md border border-white/20 pointer-events-none z-30 shadow-md">
           {axisConfig.bottomLabel}
         </div>
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-white bg-black/85 px-2.5 py-0.5 rounded-md border border-white/20 pointer-events-none z-30 shadow-md">
           {axisConfig.leftLabel}
         </div>
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-white bg-black/80 px-3 py-1 rounded-lg border border-white/20 pointer-events-none z-20 shadow-md">
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-white bg-black/85 px-2.5 py-0.5 rounded-md border border-white/20 pointer-events-none z-30 shadow-md">
           {axisConfig.rightLabel}
         </div>
 
-        {/* Center Reticle */}
-        <div className="absolute w-6 h-6 border border-white/30 rounded-full pointer-events-none flex items-center justify-center">
-          <span className="w-1 h-1 rounded-full bg-white" />
+        {/* Floating Zoom & Pan Controls (Bottom Right) */}
+        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-zinc-950/90 border border-white/15 rounded-lg p-1 z-30 shadow-xl backdrop-blur-md">
+          <div className="px-1.5 text-[10px] text-zinc-400 border-r border-white/10 hidden sm:block">
+            {Math.round(radarZoom * 100)}%
+          </div>
+          <button
+            type="button"
+            onClick={() => handleZoom('in')}
+            className="w-6 h-6 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-white/10 rounded transition-colors"
+            title="放大坐标系"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleZoom('out')}
+            className="w-6 h-6 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-white/10 rounded transition-colors"
+            title="缩小坐标系"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleResetRadar}
+            className="w-6 h-6 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-white/10 rounded transition-colors border-l border-white/10"
+            title="重置罗盘视角"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* Placed Nodes on the Coordinate Plane */}
-        {placedNodes.map(({ node, x, y, labelPosition, isCore }) => {
-          const isSelected = selectedNodeId === node.id;
-          const isHovered = hoveredNode?.id === node.id;
-          const isOtherHovered = hoveredNode !== null && !isHovered && !isSelected;
-          const isMatched = queryLower
-            ? node.name.toLowerCase().includes(queryLower) ||
-              node.englishName.toLowerCase().includes(queryLower)
-            : false;
-
-          const shouldShowLabel =
-            labelMode === 'all' ||
-            isHovered ||
-            isSelected ||
-            isMatched ||
-            (labelMode === 'smart' && isCore);
-
-          return (
-            <div
-              key={node.id}
-              onClick={() => onSelectNode(node)}
-              onMouseEnter={() => setHoveredNode(node)}
-              onMouseLeave={() => setHoveredNode(null)}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-200 group ${
-                isSelected
-                  ? 'z-50 scale-125'
-                  : isHovered
-                  ? 'z-40 scale-110'
-                  : isMatched
-                  ? 'z-35 scale-110'
-                  : isOtherHovered
-                  ? 'opacity-25 z-10'
-                  : isCore
-                  ? 'z-25'
-                  : 'z-20'
-              }`}
-              style={{
-                left: `${x}%`,
-                top: `${y}%`,
-              }}
-            >
-              <div className="relative flex flex-col items-center">
-                {isSelected && (
-                  <div className="absolute -inset-2.5 rounded-full border border-white animate-ping opacity-80 pointer-events-none" />
-                )}
-
-                <div
-                  className={`w-3.5 h-3.5 rounded-full border transition-all ${
-                    isSelected
-                      ? 'scale-150 ring-2 ring-white border-white bg-white shadow-xl'
-                      : isHovered
-                      ? 'scale-150 ring-2 ring-white/60 border-white'
-                      : isMatched
-                      ? 'scale-135 ring-2 ring-cyan-400'
-                      : isCore
-                      ? 'border-white shadow-md'
-                      : 'border-white/40'
-                  }`}
-                  style={{
-                    backgroundColor: node.color,
-                  }}
-                />
-
-                {shouldShowLabel && (
-                  <div
-                    className={`absolute whitespace-nowrap pointer-events-none ${
-                      labelPosition === 'top' ? '-top-5' : 'top-4'
-                    }`}
-                  >
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition-all border shadow-sm ${
-                        isSelected
-                          ? 'bg-white text-black font-bold border-white'
-                          : isHovered
-                          ? 'bg-white text-black font-bold border-white'
-                          : isMatched
-                          ? 'bg-black text-cyan-300 font-bold border-cyan-400'
-                          : isCore
-                          ? 'bg-black/90 text-white border-white/30'
-                          : 'bg-black/90 text-zinc-400 border-white/10 group-hover:text-white'
-                      }`}
-                    >
-                      {node.name}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Floating Detailed Inspection Card */}
+        {/* Hover Detailed Inspection Floating HUD */}
         {hoveredNode && (
-          <div className="absolute bottom-6 left-6 right-6 md:right-auto md:w-80 bg-zinc-950/95 border border-white/15 rounded-xl p-3.5 shadow-2xl backdrop-blur-xl z-50 pointer-events-none font-mono">
-            <div className="flex items-center justify-between mb-1.5">
+          <div
+            className="absolute bottom-4 left-4 right-4 sm:right-auto sm:w-80 bg-zinc-950/95 border rounded-xl p-3 shadow-2xl backdrop-blur-xl z-50 pointer-events-none font-mono animate-tooltip-fade-in"
+            style={{
+              borderColor: `${hoveredNode.color}60`,
+              boxShadow: `0 15px 35px -5px rgba(0,0,0,0.9), 0 0 20px -2px ${hoveredNode.color}35`,
+            }}
+          >
+            <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <span
                   className="w-2.5 h-2.5 rounded-full"
                   style={{ backgroundColor: hoveredNode.color }}
                 />
-                <h4 className="font-bold text-xs text-white">
-                  {hoveredNode.name}
-                </h4>
+                <h4 className="font-bold text-xs text-white">{hoveredNode.name}</h4>
               </div>
 
               <div className="text-[10px] text-cyan-400">
-                X: {axisConfig.getX(hoveredNode) > 0 ? `+${axisConfig.getX(hoveredNode)}` : axisConfig.getX(hoveredNode)} | 
-                Y: {axisConfig.getY(hoveredNode) > 0 ? `+${axisConfig.getY(hoveredNode)}` : axisConfig.getY(hoveredNode)}
+                X: {axisConfig.getX(hoveredNode) > 0 ? `+${axisConfig.getX(hoveredNode).toFixed(2)}` : axisConfig.getX(hoveredNode).toFixed(2)} | 
+                Y: {axisConfig.getY(hoveredNode) > 0 ? `+${axisConfig.getY(hoveredNode).toFixed(2)}` : axisConfig.getY(hoveredNode).toFixed(2)}
               </div>
             </div>
 
-            <p className="text-[11px] text-zinc-300 leading-snug line-clamp-2 font-sans mb-2">
+            <p className="text-[11px] text-zinc-300 leading-snug line-clamp-2 font-sans mb-1.5">
               {hoveredNode.summary}
             </p>
 
-            <div className="pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] text-zinc-400">
-              <span>CLICK TO LOCK DOSSIER</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
+            <div className="pt-1 border-t border-white/10 flex items-center justify-between text-[10px] text-zinc-400">
+              <span>CLICK TO OPEN DOSSIER</span>
+              <ArrowUpRight className="w-3 h-3 text-cyan-400" />
             </div>
           </div>
         )}
       </div>
 
-      <div className="max-w-3xl text-center text-[10px] text-zinc-500 mt-3 font-mono uppercase tracking-wider">
-        SYS // DEFAULT 42 CORE REPRESENTATIVE LANDMARKS ACTIVE // RADAR CALIBRATION NOMINAL
+      {/* 3. Subtle Status Footer */}
+      <div className="w-full max-w-4xl flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider shrink-0 px-2 py-0.5">
+        <span>SYS // 42 CORE LANDMARKS ACTIVE // DRAG OR WHEEL TO PAN & ZOOM</span>
+        <span className="hidden sm:inline">RADAR CALIBRATION NOMINAL</span>
       </div>
     </div>
   );

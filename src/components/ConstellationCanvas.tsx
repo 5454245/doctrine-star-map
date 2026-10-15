@@ -838,6 +838,7 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
           setHoveredNode(targetNode);
           setMousePos({ x: targetX, y: targetY });
           onHoverNode?.(targetNode);
+          audioEngine.playStarHover(targetNode.category);
           hoverTimeoutRef.current = null;
         }, 300);
       } else {
