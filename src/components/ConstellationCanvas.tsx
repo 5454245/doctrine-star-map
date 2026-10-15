@@ -179,43 +179,58 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
     }
   }, []);
 
-  // Spawn visual and acoustic click feedback
+  // Spawn visual and acoustic click feedback with layered shockwaves & chromatic starburst
   const triggerClickFeedback = useCallback((node: PhysicsNode) => {
+    const starAccent = node.data.color || '#38bdf8';
+
     // 1. Acoustic feedback
     audioEngine.playStarClick(node.data.category);
 
-    // 2. Quantum shockwave rings
+    // 2. Primary Quantum shockwave in exclusive star accent color
     shockwavesRef.current.push({
       x: node.x,
       y: node.y,
-      radius: node.radius,
-      maxRadius: node.radius + 110,
+      radius: node.radius * 0.9,
+      maxRadius: node.radius + 130,
       alpha: 1.0,
-      color: node.data.color || '#38bdf8',
-      lineWidth: 2.5,
+      color: starAccent,
+      lineWidth: 2.8,
     });
 
-    // 3. Energetic starlight sparks burst
-    const sparkCount = 16;
+    // Secondary delayed concentric echo wave
+    setTimeout(() => {
+      shockwavesRef.current.push({
+        x: node.x,
+        y: node.y,
+        radius: node.radius * 0.5,
+        maxRadius: node.radius + 85,
+        alpha: 0.65,
+        color: starAccent,
+        lineWidth: 1.8,
+      });
+    }, 110);
+
+    // 3. Energetic starlight sparks burst in star's chromatic accent
+    const sparkCount = 20;
     for (let i = 0; i < sparkCount; i++) {
-      const angle = (i / sparkCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-      const speed = Math.random() * 4.5 + 2.0;
+      const angle = (i / sparkCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+      const speed = Math.random() * 4.8 + 2.2;
       sparksRef.current.push({
         x: node.x,
         y: node.y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         alpha: 1.0,
-        color: i % 2 === 0 ? '#ffffff' : (node.data.color || '#38bdf8'),
-        size: Math.random() * 2.4 + 1.2,
+        color: i % 3 === 0 ? '#ffffff' : starAccent,
+        size: Math.random() * 2.6 + 1.2,
       });
     }
 
     // Wake up physics for gentle recoil
-    simEnergyRef.current = Math.max(simEnergyRef.current, 35);
+    simEnergyRef.current = Math.max(simEnergyRef.current, 45);
   }, []);
 
-  // Smoothly Fly camera to specific node when requested (with drawer offset awareness & luxury ease)
+  // Smoothly Fly camera to specific node when requested (enhanced scale, visible centering & deep space ease)
   useEffect(() => {
     if (!flyToNodeId || !canvasRef.current) return;
     const targetNode = nodeMapRef.current.get(flyToNodeId);
@@ -237,7 +252,8 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
       }
     }
 
-    const targetScale = 1.15;
+    // Enhanced scale for deep-space immersion (1.28x)
+    const targetScale = 1.28;
     const targetTx = visibleCenterX - targetNode.x * targetScale;
     const targetTy = rect.height / 2 - targetNode.y * targetScale;
 
@@ -245,12 +261,12 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
     const startTy = transformRef.current.ty;
     const startScale = transformRef.current.scale;
     const startTime = performance.now();
-    const duration = 750; // Luxuriously smooth 750ms cinematic camera glide
+    const duration = 850; // Luxuriously smooth 850ms cinematic camera glide
 
     const animateCamera = (time: number) => {
       const elapsed = time - startTime;
       const progress = Math.min(1, elapsed / duration);
-      // Premium quartic ease-out: starts with gentle speed and decelerates smoothly like a luxury spacecraft docking
+      // Premium quintic ease-out: starts with swift poise and settles with velvety deceleration
       const ease = 1 - Math.pow(1 - progress, 4);
 
       transformRef.current.tx = startTx + (targetTx - startTx) * ease;
@@ -569,29 +585,45 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
 
         const baseAlpha = isDimmed ? 0.18 : 1.0;
         const starColor = node.data.color || '#38bdf8';
+        const accentColor = starColor; // Exclusive stereotypical accent color
 
-        // Star Core Glow
+        // Star Core Glow & Natural Deep-Space Harmonic Respiration
         ctx.save();
         ctx.globalAlpha = baseAlpha;
 
-        // A. Primary Focused Star: Target Lock Reticle
-        if (isSelected || isHovered) {
+        // 1. Organic Breathing Pulse (every star has unique phase derived from its ID/era)
+        const breathPhase = time * 2.2 + (node.data.eraYear ? (node.data.eraYear % 360) * 0.05 : i * 0.45);
+        const breath = Math.sin(breathPhase) * 0.5 + 0.5; // Smooth 0 to 1
+        const auraRadius = node.radius * (1.35 + 0.45 * breath);
+
+        // Soft chromatic atmospheric aura
+        const auraGrad = ctx.createRadialGradient(node.x, node.y, 2, node.x, node.y, auraRadius);
+        auraGrad.addColorStop(0, starColor);
+        auraGrad.addColorStop(0.4, `${starColor}35`);
+        auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = auraGrad;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, auraRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Focused Selected Star: Target Lock Reticle in Exclusive Accent Color
+        if (isSelected) {
           ctx.save();
-          const haloRadius = node.radius * 2.4;
-          const radial = ctx.createRadialGradient(node.x, node.y, 4, node.x, node.y, haloRadius);
-          radial.addColorStop(0, starColor);
-          radial.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+          const selHaloRadius = node.radius * 2.8;
+          const radial = ctx.createRadialGradient(node.x, node.y, 3, node.x, node.y, selHaloRadius);
+          radial.addColorStop(0, accentColor);
+          radial.addColorStop(0.5, `${accentColor}55`);
           radial.addColorStop(1, 'rgba(0, 0, 0, 0)');
           ctx.fillStyle = radial;
           ctx.beginPath();
-          ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2);
+          ctx.arc(node.x, node.y, selHaloRadius, 0, Math.PI * 2);
           ctx.fill();
 
-          // 4-Corner Target Bracket Reticle [  ]
-          const bracketLen = 8;
-          const boxR = node.radius + 7;
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.5;
+          // 4-Corner Target Bracket Reticle [  ] in Exclusive Accent Color
+          const bracketLen = 9;
+          const boxR = node.radius + 8;
+          ctx.strokeStyle = accentColor;
+          ctx.lineWidth = 2.0;
 
           // Top-left
           ctx.beginPath();
@@ -621,36 +653,48 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
           ctx.lineTo(node.x + boxR, node.y + boxR - bracketLen);
           ctx.stroke();
 
+          // Concentric dashed quantum orbit
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = accentColor;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, node.radius * 1.55 * (1 + 0.05 * Math.sin(time * 3.5)), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
           ctx.restore();
         }
 
-        // B. Pulsing outer subtle ring
-        const pulse = Math.sin(time * 3 + i) * 0.15 + 0.85;
-        ctx.strokeStyle = isSelected || isHovered ? '#ffffff' : starColor;
-        ctx.lineWidth = isSelected ? 2 : 1;
+        // 3. Subtle Outer Orbit Ring (ALWAYS preserves starColor, NEVER turns white on hover!)
+        const ringPulse = Math.sin(time * 2.6 + i) * 0.12 + 0.92;
+        ctx.strokeStyle = isSelected ? accentColor : starColor;
+        ctx.lineWidth = isSelected ? 2.4 : isHovered ? 1.8 : 1.0;
+        ctx.globalAlpha = isSelected ? 1.0 : isHovered ? 0.85 : 0.4 * baseAlpha;
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius * (isSelected ? 1.25 : 1.1) * pulse, 0, Math.PI * 2);
+        ctx.arc(node.x, node.y, node.radius * (isSelected ? 1.25 : 1.12) * ringPulse, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = baseAlpha;
 
-        // C. Star Core Body (Stark White Core with Category Rim)
-        ctx.fillStyle = isSelected ? '#ffffff' : '#05070c';
+        // 4. Star Core Body (Deep dark body with luminous chromatic rim)
+        ctx.fillStyle = '#06080e';
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.strokeStyle = isSelected ? '#38bdf8' : starColor;
-        ctx.lineWidth = isSelected ? 2.5 : 1.8;
+        ctx.strokeStyle = isSelected ? accentColor : starColor;
+        ctx.lineWidth = isSelected ? 2.8 : isHovered ? 2.4 : 1.8;
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Inner glowing starlight speck
-        ctx.fillStyle = isSelected ? '#000000' : '#ffffff';
+        // Inner glowing starlight jewel
+        ctx.fillStyle = isSelected ? accentColor : isHovered ? starColor : '#ffffff';
         ctx.beginPath();
-        ctx.arc(node.x, node.y, isSelected ? 4 : 2.5, 0, Math.PI * 2);
+        ctx.arc(node.x, node.y, isSelected ? 4.2 : isHovered ? 3.2 : 2.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // D. Star Label & Telemetry Capsule
+        // 5. Star Label & Telemetry Capsule
         // Show labels when scale is sufficient or if active/hovered/connected
         const showLabel = scale > 0.45 || isSelected || isHovered || isConnected;
         if (showLabel) {
@@ -662,16 +706,16 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
           const textWidth = ctx.measureText(label).width;
           const badgeY = node.y + node.radius + 12;
 
-          // Softened Monochrome Pill Badge
           ctx.fillStyle = isSelected
-            ? 'rgba(255, 255, 255, 0.95)'
+            ? 'rgba(12, 14, 22, 0.95)'
             : 'rgba(8, 10, 15, 0.85)';
+          // Border preserves starColor/accentColor, never shifts to harsh white!
           ctx.strokeStyle = isSelected
-            ? '#38bdf8'
+            ? accentColor
             : isHovered
-            ? '#ffffff'
+            ? starColor
             : 'rgba(255, 255, 255, 0.15)';
-          ctx.lineWidth = isSelected ? 1.5 : 1;
+          ctx.lineWidth = isSelected ? 1.8 : isHovered ? 1.4 : 1.0;
 
           ctx.beginPath();
           ctx.roundRect(
@@ -684,7 +728,7 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
           ctx.fill();
           ctx.stroke();
 
-          ctx.fillStyle = isSelected ? '#000000' : '#f4f4f5';
+          ctx.fillStyle = isSelected ? '#ffffff' : isHovered ? '#ffffff' : '#e4e4e7';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(label, node.x, badgeY + 2);
@@ -1017,13 +1061,15 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
         </button>
       </div>
 
-      {/* Hover HUD Card */}
+      {/* Hover HUD Card with 300ms Dwell Protection & Soft Fade-In Animation */}
       {shouldShowHoverHUD && hoveredNode && mousePos && (
         <div
-          className="pointer-events-none fixed z-30 w-80 bg-zinc-950/95 border border-white/10 rounded-xl p-4 shadow-2xl backdrop-blur-xl font-sans text-white transition-opacity duration-150"
+          className="pointer-events-none fixed z-30 w-80 bg-zinc-950/95 rounded-xl p-4 shadow-2xl backdrop-blur-xl font-sans text-white animate-tooltip-fade-in border"
           style={{
             left: `${Math.min(window.innerWidth - 340, mousePos.x + 22)}px`,
             top: `${Math.min(window.innerHeight - 280, mousePos.y + 22)}px`,
+            boxShadow: `0 20px 45px -10px rgba(0, 0, 0, 0.9), 0 0 25px -4px ${hoveredNode.color}35`,
+            borderColor: `${hoveredNode.color}50`,
           }}
         >
           <div className="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
