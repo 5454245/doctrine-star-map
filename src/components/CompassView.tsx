@@ -13,6 +13,7 @@ import {
 interface CompassViewProps {
   nodes: IsmNode[];
   selectedNodeId: string | null;
+  isDrawerOpen?: boolean;
   filterCategory: CategoryType | 'all';
   searchQuery: string;
   onSelectNode: (node: IsmNode) => void;
@@ -72,6 +73,7 @@ const CORE_REPRESENTATIVE_IDS = new Set([
 export const CompassView: React.FC<CompassViewProps> = ({
   nodes,
   selectedNodeId,
+  isDrawerOpen: isDrawerOpenProp,
   filterCategory,
   searchQuery,
   onSelectNode,
@@ -272,12 +274,12 @@ export const CompassView: React.FC<CompassViewProps> = ({
     return points;
   }, [filteredNodes, axisConfig]);
 
-  const isDrawerOpen = !!selectedNodeId;
+  const isDrawerOpen = isDrawerOpenProp !== undefined ? isDrawerOpenProp : !!selectedNodeId;
 
   return (
     <div
       className={`w-full h-full overflow-y-auto overflow-x-hidden bg-black px-2 md:px-6 py-2 flex flex-col items-center justify-between font-sans text-white select-none transition-all ${
-        isDrawerOpen ? '2xl:pr-[500px]' : ''
+        isDrawerOpen ? 'lg:pr-[490px] xl:pr-[540px]' : ''
       }`}
     >
       {/* 1. Header & Controls Integrated Telemetry Bar (Compact Height) */}

@@ -79,8 +79,14 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
   const activeDraggedNodeRef = useRef<PhysicsNode | null>(null);
   const nodeDragStartScreenRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Audio mute state
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  // Audio mute state synced with audioEngine
+  const [isAudioMuted, setIsAudioMuted] = useState(() => audioEngine.getMuted());
+
+  useEffect(() => {
+    return audioEngine.subscribeBackgroundState((state) => {
+      setIsAudioMuted(state.isMuted);
+    });
+  }, []);
 
   // Hover state with 300ms dwell delay to protect user attention
   const [hoveredNode, setHoveredNode] = useState<IsmNode | null>(null);
@@ -996,9 +1002,7 @@ export const ConstellationCanvas: React.FC<ConstellationCanvasProps> = ({
   };
 
   const toggleMute = () => {
-    const next = !isAudioMuted;
-    setIsAudioMuted(next);
-    audioEngine.setMuted(next);
+    audioEngine.toggleMute();
   };
 
   const hoveredLinks = useMemo(() => {

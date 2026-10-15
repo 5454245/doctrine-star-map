@@ -28,8 +28,11 @@ export const TopNav: React.FC<TopNavProps> = ({
 
   const handleToggleBgMusic = (e: React.MouseEvent) => {
     e.stopPropagation();
-    audioEngine.toggleBackgroundMusic();
+    e.preventDefault();
+    audioEngine.toggleMute();
   };
+
+  const isAudioActive = bgAudio.isPlaying && !bgAudio.isMuted;
 
   return (
     <header className="flex items-center justify-between gap-4 px-4 md:px-6 py-3 border-b border-white/10 bg-black/90 backdrop-blur-xl shrink-0 z-30 select-none text-white font-mono">
@@ -106,14 +109,14 @@ export const TopNav: React.FC<TopNavProps> = ({
         <div className="flex items-center bg-white/5 border border-white/15 rounded-lg overflow-hidden shadow-sm hover:border-white/35 transition-all">
           <button
             onClick={handleToggleBgMusic}
-            className={`px-2.5 py-1.5 transition-colors flex items-center justify-center ${
-              bgAudio.isPlaying
+            className={`px-2.5 py-1.5 transition-colors flex items-center justify-center gap-1.5 ${
+              isAudioActive
                 ? 'text-cyan-400 bg-cyan-500/15 hover:bg-cyan-500/25'
                 : 'text-zinc-400 hover:text-white hover:bg-white/10'
             }`}
-            title={bgAudio.isPlaying ? '暂停全景背景音乐' : '播放全景背景音乐 (深空原声)'}
+            title={isAudioActive ? '点击静音背景音乐 (Mute)' : '点击开启背景音乐 (Play)'}
           >
-            {bgAudio.isPlaying ? (
+            {isAudioActive ? (
               <span className="flex items-center gap-1.5">
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
                 <span className="flex items-center gap-0.5">
@@ -121,11 +124,13 @@ export const TopNav: React.FC<TopNavProps> = ({
                   <span className="w-0.5 h-3 bg-cyan-400 animate-[bounce_1s_infinite_250ms]" />
                   <span className="w-0.5 h-1.5 bg-cyan-400 animate-[bounce_1s_infinite_400ms]" />
                 </span>
+                <span className="text-[10px] hidden sm:inline text-cyan-300 font-medium">原声: 播放中</span>
               </span>
             ) : (
               <span className="flex items-center gap-1 text-zinc-400">
-                <VolumeX className="w-3.5 h-3.5" />
-                <span className="text-[10px] hidden sm:inline">背景静音</span>
+                <VolumeX className="w-3.5 h-3.5 text-rose-400/90" />
+                <span className="text-[10px] hidden sm:inline">背景已静音</span>
+                <span className="text-[9px] px-1 py-0.5 rounded bg-white/10 text-zinc-300 hidden md:inline ml-0.5">播放</span>
               </span>
             )}
           </button>

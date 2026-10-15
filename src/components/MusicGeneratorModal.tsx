@@ -127,14 +127,20 @@ export const MusicGeneratorModal: React.FC<MusicGeneratorModalProps> = ({
   // Handle background track selection
   const handleSelectTrack = (trackId: string) => {
     audioEngine.switchBackgroundTrack(trackId);
-    if (!bgAudio.isPlaying) {
+    if (!bgAudio.isPlaying || bgAudio.isMuted) {
+      audioEngine.setMuted(false);
       audioEngine.playBackgroundMusic(trackId);
     }
   };
 
-  // Toggle Background Music playback
+  // Toggle Background Music playback / mute
   const handleTogglePlay = () => {
-    audioEngine.toggleBackgroundMusic();
+    if (bgAudio.isPlaying && !bgAudio.isMuted) {
+      audioEngine.setMuted(true);
+    } else {
+      audioEngine.setMuted(false);
+      audioEngine.playBackgroundMusic();
+    }
   };
 
   // Handle offline WAV export

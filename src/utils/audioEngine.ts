@@ -5,6 +5,7 @@ import { CategoryType, IsmNode } from '../types/ism';
 
 export interface BackgroundAudioState {
   isPlaying: boolean;
+  isMuted: boolean;
   currentTrackId: string;
   currentTrackName: string;
   volume: number;
@@ -62,6 +63,9 @@ class AudioEngine {
   private analyser: AnalyserNode | null = null;
   private isLivePlaying: boolean = false;
 
+  // Dedicated background master gain for instantaneous mute control
+  private bgMasterGain: GainNode | null = null;
+
   // Background Ambient Music State
   private bgIsPlaying: boolean = false;
   private bgCurrentTrackId: string = 'philosophical';
@@ -85,11 +89,38 @@ class AudioEngine {
     return this.ctx;
   }
 
+  /**
+   * Set global mute state
+   */
   public setMuted(muted: boolean) {
     this.isMuted = muted;
     if (muted) {
       this.pauseBackgroundMusic();
+      if (this.ctx && this.bgMasterGain) {
+        try {
+          this.bgMasterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+          this.bgMasterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+        } catch {}
+      }
+    } else {
+      if (this.ctx && this.bgMasterGain) {
+        try {
+          this.bgMasterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+          this.bgMasterGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+        } catch {}
+      }
+      this.playBackgroundMusic();
     }
+    this.notifyBackgroundState();
+  }
+
+  /**
+   * Toggle global audio mute state
+   */
+  public toggleMute(): boolean {
+    const shouldMute = !this.isMuted && this.bgIsPlaying;
+    this.setMuted(shouldMute);
+    return this.isMuted;
   }
 
   public getMuted(): boolean {
@@ -101,7 +132,7 @@ class AudioEngine {
   }
 
   public getIsPlaying(): boolean {
-    return this.bgIsPlaying;
+    return this.bgIsPlaying && !this.isMuted;
   }
 
   public subscribeBackgroundState(listener: (state: BackgroundAudioState) => void): () => void {
@@ -113,7 +144,8 @@ class AudioEngine {
   public getBackgroundState(): BackgroundAudioState {
     const track = BACKGROUND_TRACKS.find((t) => t.id === this.bgCurrentTrackId) || BACKGROUND_TRACKS[0];
     return {
-      isPlaying: this.bgIsPlaying,
+      isPlaying: this.bgIsPlaying && !this.isMuted,
+      isMuted: this.isMuted,
       currentTrackId: this.bgCurrentTrackId,
       currentTrackName: track.name,
       volume: this.bgVolume,
@@ -565,7 +597,7 @@ class AudioEngine {
    * Start / Resume continuous ambient background music
    */
   public playBackgroundMusic(trackId?: string) {
-    if (this.isMuted) return;
+    this.isMuted = false;
     if (trackId) {
       this.bgCurrentTrackId = trackId;
     }
@@ -615,6 +647,12 @@ class AudioEngine {
    * Stop all active Web Audio oscillator nodes currently sounding
    */
   private stopActiveSynthNodes() {
+    if (this.ctx && this.bgMasterGain) {
+      try {
+        this.bgMasterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.bgMasterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+      } catch {}
+    }
     this.currentSourceNodes.forEach((node) => {
       try {
         if ('stop' in node && typeof (node as AudioScheduledSourceNode).stop === 'function') {
@@ -633,7 +671,7 @@ class AudioEngine {
    * Automatically queues the next cycle seamlessly if bgIsPlaying is true!
    */
   private renderSingleLoopCycle() {
-    if (!this.bgIsPlaying) return;
+    if (!this.bgIsPlaying || this.isMuted) return;
 
     const ctx = this.initContext();
     if (!ctx) return;
@@ -648,6 +686,15 @@ class AudioEngine {
       this.analyser.connect(ctx.destination);
     }
 
+    if (!this.bgMasterGain) {
+      this.bgMasterGain = ctx.createGain();
+      this.bgMasterGain.connect(this.analyser);
+    }
+    try {
+      this.bgMasterGain.gain.cancelScheduledValues(now);
+      this.bgMasterGain.gain.setValueAtTime(1.0, now);
+    } catch {}
+
     const masterGain = ctx.createGain();
     const targetVol = this.bgVolume;
     masterGain.gain.setValueAtTime(0.001, now);
@@ -655,7 +702,7 @@ class AudioEngine {
     masterGain.gain.setValueAtTime(targetVol, now + cycleDuration - 3.0);
     masterGain.gain.linearRampToValueAtTime(0.0001, now + cycleDuration);
 
-    masterGain.connect(this.analyser);
+    masterGain.connect(this.bgMasterGain);
     this.currentSourceNodes.push(masterGain);
 
     // Filter

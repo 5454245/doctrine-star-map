@@ -35,6 +35,7 @@ export default function App() {
   // Selected node for detail drawer
   const [selectedNode, setSelectedNode] = useState<IsmNode | null>(null);
   const [flyToNodeId, setFlyToNodeId] = useState<string | null>(null);
+  const [isDetailDocked, setIsDetailDocked] = useState(false);
 
   // Modals
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -114,6 +115,7 @@ export default function App() {
             relationships={ISM_RELATIONSHIPS}
             searchQuery={searchQuery}
             selectedNodeId={selectedNode?.id || null}
+            isDrawerOpen={!!selectedNode && !isDetailDocked}
             filterCategory={filterCategory}
             onSelectNode={handleSelectNode}
           />
@@ -124,21 +126,26 @@ export default function App() {
             nodes={ISMS_DATA}
             searchQuery={searchQuery}
             selectedNodeId={selectedNode?.id || null}
+            isDrawerOpen={!!selectedNode && !isDetailDocked}
             filterCategory={filterCategory}
             onSelectNode={handleSelectNode}
           />
         )}
 
-        {/* 4. Slide-out Ism Detail Drawer / Modal */}
+        {/* 4. Slide-out Ism Detail Drawer / Modal (with Docking & View Switching) */}
         {selectedNode && (
           <IsmDetailModal
             node={selectedNode}
             allNodes={ISMS_DATA}
             relationships={ISM_RELATIONSHIPS}
+            currentView={currentView}
+            onSelectView={setCurrentView}
             onClose={() => setSelectedNode(null)}
             onSelectNode={handleSelectNode}
             onOpenCompare={(nodeA) => handleOpenCompare(nodeA)}
             onOpenMusic={(node) => handleOpenMusic(node)}
+            isDocked={isDetailDocked}
+            onToggleDock={() => setIsDetailDocked((prev) => !prev)}
           />
         )}
 

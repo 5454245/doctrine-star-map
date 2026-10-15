@@ -6,6 +6,7 @@ interface TimelineViewProps {
   nodes: IsmNode[];
   relationships: IsmRelationship[];
   selectedNodeId: string | null;
+  isDrawerOpen?: boolean;
   filterCategory: CategoryType | 'all';
   searchQuery: string;
   onSelectNode: (node: IsmNode) => void;
@@ -23,6 +24,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   nodes,
   relationships,
   selectedNodeId,
+  isDrawerOpen = false,
   filterCategory,
   searchQuery,
   onSelectNode,
@@ -156,7 +158,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full overflow-y-auto bg-black px-4 md:px-12 py-8 scroll-smooth font-sans text-white"
+      className={`w-full h-full overflow-y-auto bg-black px-4 md:px-12 py-8 scroll-smooth font-sans text-white transition-all ${
+        isDrawerOpen ? 'lg:pr-[500px] xl:pr-[550px]' : ''
+      }`}
     >
       <div className="max-w-5xl mx-auto space-y-10">
         {/* Intro Banner */}
