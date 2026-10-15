@@ -1,4 +1,4 @@
-# 主义星图 · 意识形态脉络与思想全景图谱 (Isms Constellation)
+# 主义星图 ·意识形态脉络与思想全景图谱 (Isms Constellation)
 
 <div align="center">
 
